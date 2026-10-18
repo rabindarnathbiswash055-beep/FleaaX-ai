@@ -13,6 +13,27 @@ enum class AvatarState(
     UNAVAILABLE("Speech Unavailable", "Voice service unavailable — Text mode active hai")
 }
 
+enum class AvatarThemePreset(
+    val title: String,
+    val primaryHex: Long,
+    val secondaryHex: Long,
+    val hairHighlightLabel: String
+) {
+    SAPPHIRE_CYBER("Sapphire Cyber", 0xFF4F8CFF, 0xFF22D3EE, "Electric Sapphire & Cyan Visor"),
+    VIOLET_NEURAL("Violet Neural", 0xFF8B5CF6, 0xFFC084FC, "Nebula Violet & Amethyst Visor"),
+    EMERALD_MATRIX("Emerald Matrix", 0xFF10B981, 0xFF34D399, "Cyber Emerald & Mint Visor"),
+    SUNSET_ROSE("Sunset Rose", 0xFFF43F5E, 0xFFFB7185, "Crimson Rose & Coral Visor")
+}
+
+enum class ResponseLengthPreference(
+    val title: String,
+    val promptInstruction: String
+) {
+    SHORT("Concise (1-3 lines)", "Keep responses very concise (1 to 3 short sentences) unless code is requested."),
+    BALANCED("Balanced", "Provide clear, well-balanced explanations with scannable bullet points."),
+    DETAILED("Detailed Step-by-Step", "Provide comprehensive, step-by-step explanations with examples.")
+}
+
 enum class AssistantLanguage(
     val code: String,
     val displayName: String,
@@ -67,13 +88,31 @@ enum class PersonalityStyle(
         title = "Friendly",
         badge = "Warm & Helpful",
         descriptionHinglish = "Dostana aur asaan Hinglish/Banglish/English style.",
-        systemPromptDirective = "Be warm, encouraging, friendly, and conversational. Explain technical steps clearly in beginner-friendly Hinglish/Banglish/English matching the user's language."
+        systemPromptDirective = "Be warm, encouraging, friendly, and conversational. Explain technical steps clearly in beginner-friendly Hinglish/Banglish/English matching the user's language. Never simulate genuine human emotions as factual internal states."
     ),
     PROFESSIONAL(
         title = "Professional",
         badge = "Structured & Clear",
         descriptionHinglish = "Seedha, polite aur professional jawab.",
         systemPromptDirective = "Be structured, polite, accurate, and professional. Provide clear bullet points and well-organized guidance."
+    ),
+    FUNNY(
+        title = "Funny",
+        badge = "Witty & Lighthearted",
+        descriptionHinglish = "Halka-phulka humor aur witty examples ke saath jawab.",
+        systemPromptDirective = "Use lighthearted wit, clever analogies, and playful energy while keeping technical and device answers 100% accurate."
+    ),
+    STUDY_BUDDY(
+        title = "Study Buddy",
+        badge = "Academic & Patient",
+        descriptionHinglish = "Exam prep, concepts, aur step-by-step revision mein madadgar.",
+        systemPromptDirective = "Act as a patient, encouraging study tutor. Break down complex topics into simple analogies, key takeaways, and quick revision questions."
+    ),
+    GAMING_ASSISTANT(
+        title = "Gaming Assistant",
+        badge = "Tactical & Creator",
+        descriptionHinglish = "Gaming strategy, FPS/sensitivity tuning, aur YouTube ideas specialist.",
+        systemPromptDirective = "Act as a tactical gaming coach and YouTube gaming content strategist. Focus on fair-play tips, device performance, sensitivity optimization, and creator workflows."
     ),
     CONCISE(
         title = "Concise",
@@ -83,9 +122,9 @@ enum class PersonalityStyle(
     ),
     PLAYFUL(
         title = "Playful",
-        badge = "Witty & Energetic",
-        descriptionHinglish = "Halka-phulka, energetic aur creative style.",
-        systemPromptDirective = "Be upbeat, witty, energetic, and charming while remaining respectful, accurate, and privacy-conscious."
+        badge = "Creative & Energetic",
+        descriptionHinglish = "Energetic aur creative style.",
+        systemPromptDirective = "Be upbeat, energetic, and creative while remaining respectful, accurate, and privacy-conscious."
     )
 }
 
@@ -94,6 +133,28 @@ enum class EngineSource(val label: String) {
     LOCAL_ASSISTANT("On-Device Assistant (Offline)"),
     GEMINI_CLOUD("Gemini Cloud AI (Online)"),
     SYSTEM_SECURITY("Privacy & Security Guard")
+}
+
+enum class WorkspaceSubTab(val title: String) {
+    PLANNER("Planner & Focus"),
+    CODING("Coding Lab"),
+    GAMING("Gaming Hub"),
+    VAULT("Vault & Search"),
+    MEMORY("Smart Memory")
+}
+
+enum class NoteCategory(val label: String) {
+    NOTE("Personal Note"),
+    AI_ANSWER("Saved AI Answer"),
+    CODE_SNIPPET("Code Snippet"),
+    PROJECT_IDEA("Project Idea"),
+    DOC_SUMMARY("Document Summary")
+}
+
+enum class TaskRecurrence(val label: String) {
+    ONCE("Once"),
+    DAILY("Daily"),
+    WEEKDAYS("Mon–Fri")
 }
 
 @Serializable
@@ -147,8 +208,8 @@ sealed class PendingAction {
 
     @Serializable
     data class AdjustVolume(
-        val streamType: String, // MEDIA, RING, ALARM, NOTIFICATION
-        val targetPercent: Int, // 0..100 or -1 for step up, -2 for step down
+        val streamType: String,
+        val targetPercent: Int,
         override val actionTitle: String = "Adjust Device Volume",
         override val summaryHinglish: String = "$streamType volume ko update karega.",
         override val permissionNote: String = "Uses Android AudioManager stream controls.",
@@ -157,7 +218,7 @@ sealed class PendingAction {
 
     @Serializable
     data class OpenSystemSettings(
-        val panelType: String, // WIFI, BLUETOOTH, SOUND, DISPLAY, NOTIFICATION_LISTENER, APP_DETAILS
+        val panelType: String,
         override val actionTitle: String = "Open System Settings Panel",
         override val summaryHinglish: String = "Android $panelType settings panel open karega (Android 10+ par silent background Wi-Fi/BT toggle restricted hai).",
         override val permissionNote: String = "Opens official Android Settings panel for user control.",
@@ -174,7 +235,7 @@ sealed class PendingAction {
 
     @Serializable
     data class MediaTransport(
-        val command: String, // PLAY_PAUSE, NEXT, PREVIOUS, STOP
+        val command: String,
         override val actionTitle: String = "Media Playback Control",
         override val summaryHinglish: String = "Active music player ko '$command' media key bhejega.",
         override val permissionNote: String = "Uses AudioManager dispatchMediaKeyEvent.",
@@ -183,8 +244,8 @@ sealed class PendingAction {
 
     @Serializable
     data class ClearAllMemory(
-        override val actionTitle: String = "Wipe All Local Memory & History",
-        override val summaryHinglish: String = "ZIA ke saare saved preferences, reminders aur chat history phone se permanently delete ho jayenge.",
+        override val actionTitle: String = "Wipe All Local Memory & Vault Data",
+        override val summaryHinglish: String = "ZIA ke saare saved preferences, reminders, study tasks, code notes, gaming profiles aur chat history phone se permanently delete ho jayenge.",
         override val permissionNote: String = "Irreversible local database reset.",
         override val requiresConfirmation: Boolean = true
     ) : PendingAction()
@@ -208,4 +269,20 @@ data class NotificationSummary(
     val appTitle: String,
     val contentPreview: String,
     val timestamp: Long
+)
+
+data class SmartSearchResult(
+    val query: String,
+    val localMatches: List<String>,
+    val retrievedWebFacts: List<String>,
+    val citedSources: List<String>,
+    val aiSynthesis: String,
+    val isOnlineResult: Boolean
+)
+
+data class PerformanceTelemetry(
+    val appUsedRamMb: Long = 38L,
+    val appMaxRamMb: Long = 256L,
+    val lastResponseLatencyMs: Long = 8L,
+    val lastEngineUsed: String = "Local Engine (0ms)"
 )

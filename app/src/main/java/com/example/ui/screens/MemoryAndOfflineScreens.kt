@@ -1,5 +1,11 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -20,13 +26,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
@@ -53,16 +58,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.example.R
 import com.example.data.AssistantLanguage
+import com.example.data.AvatarThemePreset
 import com.example.data.MemoryFactEntity
 import com.example.data.PendingAction
+import com.example.data.PerformanceTelemetry
 import com.example.data.PersonalityStyle
+import com.example.data.ResponseLengthPreference
 import com.example.data.ZiaSettingsState
 import com.example.security.DeviceHardwareAudit
 import com.example.ui.components.ActionConfirmationModalCard
@@ -73,11 +82,11 @@ import com.example.ui.theme.ZiaCrimsonError
 import com.example.ui.theme.ZiaElevatedBorder
 import com.example.ui.theme.ZiaEmeraldOnline
 import com.example.ui.theme.ZiaMidnightSurface
-import com.example.ui.theme.ZiaNeuralViolet
 import com.example.ui.theme.ZiaSapphireBlue
 import com.example.ui.theme.ZiaTextMuted
 import com.example.ui.theme.ZiaTextPrimary
 import com.example.ui.theme.ZiaTextSecondary
+import java.util.Locale
 
 @Composable
 fun MemoryScreen(
@@ -90,13 +99,20 @@ fun MemoryScreen(
     onDeleteMemoryFact: (Int) -> Unit,
     onRequestWipeAll: () -> Unit,
     onConfirmAction: () -> Unit,
-    onCancelAction: () -> Unit
+    onCancelAction: () -> Unit,
+    onExportMemoryText: () -> String,
+    onShowBanner: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    var searchFilter by rememberSaveable { mutableStateOf("") }
     var newKey by rememberSaveable { mutableStateOf("") }
     var newValue by rememberSaveable { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf("Preference") }
     var editingFact by remember { mutableStateOf<MemoryFactEntity?>(null) }
     var editKeyText by rememberSaveable { mutableStateOf("") }
     var editValueText by rememberSaveable { mutableStateOf("") }
+
+    val categories = listOf("Preference", "Favourite Command", "Project Note")
 
     if (editingFact != null) {
         AlertDialog(
@@ -135,10 +151,18 @@ fun MemoryScreen(
         )
     }
 
+    val filteredFacts = remember(memoryFacts, searchFilter) {
+        val q = searchFilter.trim().lowercase(Locale.ROOT)
+        if (q.isEmpty()) memoryFacts
+        else memoryFacts.filter {
+            it.key.lowercase(Locale.ROOT).contains(q) ||
+                it.value.lowercase(Locale.ROOT).contains(q) ||
+                it.category.lowercase(Locale.ROOT).contains(q)
+        }
+    }
+
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (pendingAction != null) {
@@ -158,12 +182,12 @@ fun MemoryScreen(
                 .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .testTag("memory_vault_list"),
-            contentPadding = PaddingValues(vertical = 12.dp),
+            contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
                 Text(
-                    text = "Local Preference Memory Vault",
+                    text = "Smart Personal Memory",
                     style = MaterialTheme.typography.headlineMedium,
                     color = ZiaTextPrimary
                 )
@@ -174,7 +198,7 @@ fun MemoryScreen(
                 )
             }
 
-            // Opt-In / Opt-Out Memory Switch Card
+            // Master Memory Switch
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = ZiaCardSurface),
@@ -192,7 +216,7 @@ fun MemoryScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Save Local Preferences",
+                                text = "Master Memory Switch",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = ZiaTextPrimary
                             )
@@ -211,16 +235,31 @@ fun MemoryScreen(
                 }
             }
 
-            // Add New Preference Card
+            // Add New Preference / Favourite Command / Project Note
             item {
                 ControlSectionCard(
-                    title = "Add Explicit Preference",
-                    subtitle = "PrivacyGuard automatically blocks passwords, OTPs, PINs, API keys, and card numbers."
+                    title = "Save Preference, Command or Project Note",
+                    subtitle = "PrivacyGuard automatically blocks passwords, OTPs, PINs, API secrets, and card numbers."
                 ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        categories.forEach { cat ->
+                            FilterChip(
+                                selected = selectedCategory == cat,
+                                onClick = { selectedCategory = cat },
+                                label = { Text(cat) }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = newKey,
                         onValueChange = { newKey = it },
-                        label = { Text("Key (e.g. User Name, Preferred IDE)") },
+                        label = { Text("Title / Key (e.g. User Name, Morning Command)") },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -230,7 +269,7 @@ fun MemoryScreen(
                     OutlinedTextField(
                         value = newValue,
                         onValueChange = { newValue = it },
-                        label = { Text("Value (e.g. Aarav, Android Studio / Acode)") },
+                        label = { Text("Value / Details") },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -240,7 +279,7 @@ fun MemoryScreen(
                     Button(
                         onClick = {
                             if (newKey.isNotBlank() && newValue.isNotBlank()) {
-                                onAddMemoryFact(newKey, newValue, "Custom")
+                                onAddMemoryFact(newKey, newValue, selectedCategory)
                                 newKey = ""
                                 newValue = ""
                             }
@@ -256,18 +295,48 @@ fun MemoryScreen(
                 }
             }
 
-            // Saved Items Header
+            // Search & Export Bar
             item {
+                OutlinedTextField(
+                    value = searchFilter,
+                    onValueChange = { searchFilter = it },
+                    label = { Text("Search saved memory & commands...") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("memory_search_input")
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "SAVED PREFERENCES (${memoryFacts.size})",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = ZiaSapphireBlue
-                    )
+                    OutlinedButton(
+                        onClick = {
+                            val exported = onExportMemoryText()
+                            val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            cb?.setPrimaryClip(ClipData.newPlainText("ZIA Memory Export", exported))
+                            onShowBanner("Memory & Vault export clipboard mein copy ho gaya!")
+                            try {
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, exported)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(Intent.createChooser(sendIntent, "Export ZIA Memory").apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } catch (_: Exception) {
+                            }
+                        },
+                        modifier = Modifier.testTag("export_memory_button")
+                    ) {
+                        Icon(Icons.Default.IosShare, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Export Memory")
+                    }
+
                     OutlinedButton(
                         onClick = onRequestWipeAll,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = ZiaCrimsonError),
@@ -280,7 +349,7 @@ fun MemoryScreen(
                 }
             }
 
-            items(memoryFacts, key = { it.id }) { fact ->
+            items(filteredFacts, key = { it.id }) { fact ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = ZiaMidnightSurface),
                     shape = RoundedCornerShape(16.dp),
@@ -331,245 +400,47 @@ fun MemoryScreen(
 }
 
 @Composable
-fun OfflineModeScreen(
-    settings: ZiaSettingsState,
-    isNetworkOnline: Boolean,
-    hardwareAudit: DeviceHardwareAudit?,
-    onToggleForceOffline: (Boolean) -> Unit,
-    onToggleWakeWordSession: (Boolean) -> Unit
-) {
-    val offlineCapabilities = listOf(
-        "Deterministic Phone Commands (EN / Hinglish / Banglish / বাংলা)" to "100% Offline",
-        "Media, Ring, Alarm & Notification Volume Control" to "100% Offline",
-        "Set System Alarms & Local SQLite Reminders" to "100% Offline",
-        "Launch Installed Apps & System Settings Panels" to "100% Offline",
-        "Calls & SMS Composer with Confirmation Preview" to "100% Offline",
-        "Local Coding Templates (Compose, Coroutines, Math)" to "100% Offline",
-        "View, Edit & Delete Local Preference Memory" to "100% Offline"
-    )
-
-    val onlineCapabilities = listOf(
-        "Open-Ended Gemini 3.5 Flash Cloud Reasoning" to "Requires Internet + Consent",
-        "Complex Multi-File Code Generation & Debugging" to "Requires Internet + Consent",
-        "Cloud-Backed Speech Recognition (if offline pack missing)" to "Depends on Android Speech Pack"
-    )
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-            .widthIn(max = 600.dp)
-            .testTag("offline_mode_list"),
-        contentPadding = PaddingValues(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Text(
-                text = "Offline Capability & Hardware Audit",
-                style = MaterialTheme.typography.headlineMedium,
-                color = ZiaTextPrimary
-            )
-            Text(
-                text = "Transparent breakdown of what runs 100% on your phone without internet vs. when cloud AI is used.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = ZiaTextSecondary
-            )
-        }
-
-        // Force Offline Mode Toggle
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = ZiaCardSurface),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, ZiaAmberWarning.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CloudOff, contentDescription = null, tint = ZiaAmberWarning)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Force 100% Offline Mode",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = ZiaTextPrimary
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "ON karne par ZIA kabhi bhi cloud API call nahi karegi — chahe Wi-Fi/Mobile data on ho.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ZiaTextSecondary
-                        )
-                    }
-                    Switch(
-                        checked = settings.forceOfflineMode,
-                        onCheckedChange = onToggleForceOffline,
-                        modifier = Modifier.testTag("force_offline_mode_switch")
-                    )
-                }
-            }
-        }
-
-        // Real Hardware & On-Device LLM Evaluation Card
-        item {
-            ControlSectionCard(
-                title = "Redmi 9 / Android 10 Hardware & Local LLM Audit",
-                subtitle = "Live runtime inspection via ActivityManager.MemoryInfo & StatFs (No fake claims)"
-            ) {
-                if (hardwareAudit != null) {
-                    Text(
-                        text = "• Device: ${hardwareAudit.deviceModel} (${hardwareAudit.androidRelease})\n" +
-                            "• RAM: ${String.format("%.2f", hardwareAudit.availableRamGb)} GB Free / ${String.format("%.1f", hardwareAudit.totalRamGb)} GB Total\n" +
-                            "• Free Internal Storage: ${String.format("%.2f", hardwareAudit.freeStorageGb)} GB\n" +
-                            "• CPU Cores: ${hardwareAudit.cpuCores}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = ZiaAcousticCyan
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = hardwareAudit.llmRecommendationHinglish,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = ZiaTextPrimary
-                    )
-                }
-            }
-        }
-
-        // Wake Word ("Hey ZIA") Research & Foreground Session Card
-        item {
-            ControlSectionCard(
-                title = "Wake Word (“Hey ZIA”) & Battery Architecture",
-                subtitle = "Honest assessment of Android 10 speech recognition & background mic rules"
-            ) {
-                Text(
-                    text = "Technical Reality (Hinglish):\n" +
-                        "• Ordinary Android SpeechRecognizer continuous 24/7 offline hotword DSP engine nahi hota.\n" +
-                        "• Background mein lagataar mic khula rakhne se Android 10 / MIUI battery tezi se drain hoti hai aur OS service kill kar deta hai.\n" +
-                        "• Isliye ZIA Push-to-Talk ko primary safe mode rakhti hai, aur jab aap 'Hey ZIA Foreground Session' ON karte hain, tabhi screen khuli rehne par wake-prefix recognize hota hai.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = ZiaTextSecondary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Enable 'Hey ZIA' Foreground Session Mode",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = ZiaTextPrimary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = settings.wakeWordSessionEnabled,
-                        onCheckedChange = onToggleWakeWordSession,
-                        modifier = Modifier.testTag("wake_word_session_switch")
-                    )
-                }
-            }
-        }
-
-        // Offline Capability Matrix
-        item {
-            ControlSectionCard(
-                title = "Works 100% Without Internet",
-                subtitle = "LocalCommandEngine + LocalAssistantEngine + Room SQLite"
-            ) {
-                offlineCapabilities.forEach { (feature, badge) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = ZiaEmeraldOnline,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = feature,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ZiaTextPrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = badge,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ZiaEmeraldOnline
-                        )
-                    }
-                }
-            }
-        }
-
-        // Online Capability Matrix
-        item {
-            ControlSectionCard(
-                title = "Requires Online Connectivity & User Consent",
-                subtitle = "Automatically falls back to Local Assistant when offline"
-            ) {
-                onlineCapabilities.forEach { (feature, badge) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Memory,
-                            contentDescription = null,
-                            tint = ZiaNeuralViolet,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = feature,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ZiaTextPrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = badge,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ZiaNeuralViolet
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun SettingsScreen(
     settings: ZiaSettingsState,
     notificationAccessGranted: Boolean,
+    hardwareAudit: DeviceHardwareAudit?,
+    performanceTelemetry: PerformanceTelemetry,
+    pendingAction: PendingAction?,
     onSelectLanguage: (AssistantLanguage) -> Unit,
     onSelectPersonality: (PersonalityStyle) -> Unit,
+    onSelectAvatarTheme: (AvatarThemePreset) -> Unit,
+    onSelectResponseLength: (ResponseLengthPreference) -> Unit,
+    onSaveCustomGreeting: (String) -> Unit,
+    onToggleVoiceInput: (Boolean) -> Unit,
     onToggleVoiceOutput: (Boolean) -> Unit,
     onSpeechRateChange: (Float) -> Unit,
     onSpeechPitchChange: (Float) -> Unit,
     onTestVoiceClick: () -> Unit,
+    onToggleMemorySaving: (Boolean) -> Unit,
     onToggleCloudConsent: (Boolean) -> Unit,
+    onToggleCloudPersonalContext: (Boolean) -> Unit,
+    onToggleCloudDocUpload: (Boolean) -> Unit,
+    onToggleForceOffline: (Boolean) -> Unit,
+    onToggleWakeWordSession: (Boolean) -> Unit,
     onToggleNotificationReader: (Boolean) -> Unit,
     onOpenNotificationAccessSettings: () -> Unit,
     onOpenAppPermissionSettings: () -> Unit,
+    onRequestWipeAllData: () -> Unit,
+    onConfirmAction: () -> Unit,
+    onCancelAction: () -> Unit,
     onSaveCustomApiKey: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    val micPermissionGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
+
     var apiKeyDraft by rememberSaveable(settings.customGeminiApiKey) {
         mutableStateOf(settings.customGeminiApiKey)
+    }
+    var greetingDraft by rememberSaveable(settings.customGreeting) {
+        mutableStateOf(settings.customGreeting)
     }
 
     LazyColumn(
@@ -581,63 +452,168 @@ fun SettingsScreen(
         contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        if (pendingAction != null) {
+            item {
+                ActionConfirmationModalCard(
+                    pendingAction = pendingAction,
+                    onConfirm = onConfirmAction,
+                    onCancel = onCancelAction,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
         item {
             Text(
-                text = "ZIA AI Settings, Privacy & Build Guide",
+                text = "Privacy Control Center & Settings",
                 style = MaterialTheme.typography.headlineMedium,
                 color = ZiaTextPrimary
             )
             Text(
-                text = "Configure multilingual speech, personality, cloud AI consent, and permissions.",
+                text = "Dedicated privacy dashboard, adaptive personality & avatar customizer, and Redmi 9 hardware monitor.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = ZiaTextSecondary
             )
         }
 
-        // 1. Language Selection
+        // 1. Dedicated Privacy Control Center
         item {
             ControlSectionCard(
-                title = "1. Multilingual Speech & Text Language",
-                subtitle = "Recognition accuracy depends on Android Speech Services, downloaded language packs, accent, and network."
+                title = "1. Privacy Control Center",
+                subtitle = "Live Android OS permission status + granular data & cloud consent switches"
             ) {
-                AssistantLanguage.entries.forEach { lang ->
-                    val isSelected = settings.language == lang
-                    Surface(
-                        color = if (isSelected) ZiaSapphireBlue.copy(alpha = 0.2f) else ZiaMidnightSurface,
-                        shape = RoundedCornerShape(12.dp),
-                        onClick = { onSelectLanguage(lang) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .border(
-                                width = 1.dp,
-                                color = if (isSelected) ZiaSapphireBlue else ZiaElevatedBorder,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = lang.displayName,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = if (isSelected) ZiaAcousticCyan else ZiaTextPrimary
-                            )
-                            Text(
-                                text = "Example: \"${lang.samplePrompt}\"",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ZiaTextSecondary
-                            )
-                        }
+                // OS Permission Badges
+                Surface(
+                    color = ZiaMidnightSurface,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, ZiaElevatedBorder, RoundedCornerShape(14.dp))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "LIVE ANDROID OS PERMISSION STATUS",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ZiaAcousticCyan
+                        )
+                        Text(
+                            text = "• Microphone (RECORD_AUDIO): ${if (micPermissionGranted) "GRANTED" else "NOT GRANTED"}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (micPermissionGranted) ZiaEmeraldOnline else ZiaAmberWarning
+                        )
+                        Text(
+                            text = "• Notification Access (Listener): ${if (notificationAccessGranted) "GRANTED" else "NOT GRANTED"}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (notificationAccessGranted) ZiaEmeraldOnline else ZiaAmberWarning
+                        )
+                        Text(
+                            text = "Important Honesty Note: Niche ke switches ZIA ke اندر feature ko turant disable karte hain, lekin Android OS level par permission revoke karne ke liye 'Open Android App Permissions' button se system settings mein revoke karein.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ZiaTextSecondary
+                        )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                PrivacySwitchRow(
+                    title = "Enable Cloud AI Reasoning",
+                    subtitle = "Allow online queries to Gemini when connected",
+                    checked = settings.cloudAiConsentEnabled,
+                    onCheckedChange = onToggleCloudConsent,
+                    tag = "cloud_consent_switch"
+                )
+                PrivacySwitchRow(
+                    title = "Share Saved Preferences with Cloud AI",
+                    subtitle = "Ask permission before sending personal memory context to cloud",
+                    checked = settings.cloudPersonalContextConsent,
+                    onCheckedChange = onToggleCloudPersonalContext,
+                    tag = "cloud_personal_context_switch"
+                )
+                PrivacySwitchRow(
+                    title = "Allow Document & Screenshot Cloud Upload",
+                    subtitle = "Required before analyzing SAF documents or gaming screenshots online",
+                    checked = settings.cloudDocumentUploadConsent,
+                    onCheckedChange = onToggleCloudDocUpload,
+                    tag = "cloud_doc_upload_switch"
+                )
+                PrivacySwitchRow(
+                    title = "Save Local Personal Memory",
+                    subtitle = "Store approved preferences & notes in on-device SQLite",
+                    checked = settings.memorySavingEnabled,
+                    onCheckedChange = onToggleMemorySaving,
+                    tag = "privacy_memory_switch"
+                )
+                PrivacySwitchRow(
+                    title = "Allow Push-to-Talk Voice Input",
+                    subtitle = "Enable microphone speech recognition when pressing Mic button",
+                    checked = settings.voiceInputEnabled,
+                    onCheckedChange = onToggleVoiceInput,
+                    tag = "voice_input_switch"
+                )
+                PrivacySwitchRow(
+                    title = "Enable Voice Replies (TextToSpeech)",
+                    subtitle = "Speak ZIA's answers aloud automatically",
+                    checked = settings.voiceOutputEnabled,
+                    onCheckedChange = onToggleVoiceOutput,
+                    tag = "tts_enabled_switch"
+                )
+                PrivacySwitchRow(
+                    title = "Force 100% Offline Mode",
+                    subtitle = "Block all cloud network calls even when Wi-Fi/Data is on",
+                    checked = settings.forceOfflineMode,
+                    onCheckedChange = onToggleForceOffline,
+                    tag = "force_offline_mode_switch"
+                )
+                PrivacySwitchRow(
+                    title = "Enable Optional Notification Reader",
+                    subtitle = "Cache & read incoming notifications locally (Never uploaded)",
+                    checked = settings.notificationReaderEnabled,
+                    onCheckedChange = onToggleNotificationReader,
+                    tag = "notification_reader_switch"
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onOpenAppPermissionSettings,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("OS Permissions")
+                    }
+                    OutlinedButton(
+                        onClick = onOpenNotificationAccessSettings,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Notification Access")
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onRequestWipeAllData,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ZiaCrimsonError),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Wipe All Saved Memory, Vault, Planner & Chat Data")
                 }
             }
         }
 
-        // 2. Personality Style
+        // 2. Adaptive AI Personality & Avatar Appearance Customizer
         item {
             ControlSectionCard(
-                title = "2. ZIA Personality Style",
-                subtitle = "Changes how ZIA structures both offline and online responses."
+                title = "2. Adaptive AI Personality & Avatar Customizer",
+                subtitle = "Customize ZIA's persona, avatar visor theme, response length & custom greeting. (ZIA never simulates human emotions as factual internal states)."
             ) {
+                Text(
+                    text = "Select Personality Mode:",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = ZiaAcousticCyan
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -653,41 +629,91 @@ fun SettingsScreen(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = settings.personality.descriptionHinglish,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = ZiaAcousticCyan
-                )
-            }
-        }
 
-        // 3. Voice & TextToSpeech Tuning
-        item {
-            ControlSectionCard(
-                title = "3. Voice Replies & Android TextToSpeech",
-                subtitle = "Customize ZIA's speaking speed and voice pitch."
-            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Select Anime Avatar Appearance Theme:",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = ZiaSapphireBlue
+                )
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Speak Replies Aloud (TTS)",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = ZiaTextPrimary
-                    )
-                    Switch(
-                        checked = settings.voiceOutputEnabled,
-                        onCheckedChange = onToggleVoiceOutput,
-                        modifier = Modifier.testTag("tts_enabled_switch")
-                    )
+                    AvatarThemePreset.entries.forEach { theme ->
+                        FilterChip(
+                            selected = settings.avatarTheme == theme,
+                            onClick = { onSelectAvatarTheme(theme) },
+                            label = { Text(theme.title) }
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Speech Rate: ${String.format("%.2f", settings.speechRate)}x",
+                    text = "Response Length Preference:",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = ZiaTextSecondary
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ResponseLengthPreference.entries.forEach { len ->
+                        FilterChip(
+                            selected = settings.responseLength == len,
+                            onClick = { onSelectResponseLength(len) },
+                            label = { Text(len.title) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = greetingDraft,
+                    onValueChange = { greetingDraft = it },
+                    label = { Text("Custom Greeting Message") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = { onSaveCustomGreeting(greetingDraft) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Save Custom Greeting")
+                }
+            }
+        }
+
+        // 3. Multilingual Speech & Voice Tuning
+        item {
+            ControlSectionCard(
+                title = "3. Multilingual Voice & Language Settings",
+                subtitle = "Support for English, Hinglish, Banglish, and বাংলা. Accuracy depends on Android Speech Services & downloaded packs."
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AssistantLanguage.entries.forEach { lang ->
+                        FilterChip(
+                            selected = settings.language == lang,
+                            onClick = { onSelectLanguage(lang) },
+                            label = { Text(lang.displayName) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Speech Rate: ${String.format(Locale.US, "%.2f", settings.speechRate)}x",
                     style = MaterialTheme.typography.labelLarge,
                     color = ZiaTextSecondary
                 )
@@ -698,7 +724,7 @@ fun SettingsScreen(
                 )
 
                 Text(
-                    text = "Voice Pitch: ${String.format("%.2f", settings.speechPitch)}x",
+                    text = "Voice Pitch: ${String.format(Locale.US, "%.2f", settings.speechPitch)}x",
                     style = MaterialTheme.typography.labelLarge,
                     color = ZiaTextSecondary
                 )
@@ -708,59 +734,69 @@ fun SettingsScreen(
                     valueRange = 0.7f..1.4f
                 )
 
-                Button(
-                    onClick = onTestVoiceClick,
-                    modifier = Modifier.testTag("test_tts_voice_button")
-                ) {
-                    Icon(Icons.Default.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Test ZIA Voice Now")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onTestVoiceClick,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("test_tts_voice_button")
+                    ) {
+                        Icon(Icons.Default.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Test Voice")
+                    }
+                    OutlinedButton(
+                        onClick = { onToggleWakeWordSession(!settings.wakeWordSessionEnabled) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (settings.wakeWordSessionEnabled) "Hey ZIA: ON" else "Hey ZIA: OFF")
+                    }
                 }
             }
         }
 
-        // 4. Hybrid Cloud AI Provider & Security Notice
+        // 4. Performance, Resource Management & Local LLM Evaluation (Redmi 9 · 6 GB RAM)
         item {
             ControlSectionCard(
-                title = "4. Cloud AI Provider & Security Notice",
-                subtitle = "Built-in Gemini 3.5 Flash + Optional Custom API Key Override"
+                title = "4. Performance, Latency & Redmi 9 Hardware Audit",
+                subtitle = "Live JVM RAM usage, response latency, and on-device LLM compatibility"
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Allow Cloud AI Queries (User Consent)",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = ZiaTextPrimary
-                        )
-                        Text(
-                            text = "OFF karne par koi bhi text cloud provider ko nahi bheja jayega.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ZiaTextSecondary
-                        )
-                    }
-                    Switch(
-                        checked = settings.cloudAiConsentEnabled,
-                        onCheckedChange = onToggleCloudConsent,
-                        modifier = Modifier.testTag("cloud_consent_switch")
+                Text(
+                    text = "• App JVM Memory Usage: ${performanceTelemetry.appUsedRamMb} MB / ${performanceTelemetry.appMaxRamMb} MB\n" +
+                        "• Last Response Latency: ${performanceTelemetry.lastResponseLatencyMs} ms (${performanceTelemetry.lastEngineUsed})",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ZiaEmeraldOnline
+                )
+                if (hardwareAudit != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "• Device: ${hardwareAudit.deviceModel} (${hardwareAudit.androidRelease})\n" +
+                            "• System RAM: ${String.format(Locale.US, "%.2f", hardwareAudit.availableRamGb)} GB Free / ${String.format(Locale.US, "%.1f", hardwareAudit.totalRamGb)} GB Total\n" +
+                            "• Free Storage: ${String.format(Locale.US, "%.2f", hardwareAudit.freeStorageGb)} GB · CPU Cores: ${hardwareAudit.cpuCores}\n\n" +
+                            hardwareAudit.llmRecommendationHinglish,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ZiaTextPrimary
                     )
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(10.dp))
+        // 5. Configurable Cloud AI API Key & Security Guidance
+        item {
+            ControlSectionCard(
+                title = "5. Cloud AI Provider & Key Security",
+                subtitle = "Provider-independent interface (Gemini 3.5 Flash default)"
+            ) {
                 Text(
-                    text = "Security Warning: Android APKs can be decompiled. Any user-supplied API key stored on-device or via BuildConfig in a prototype APK is extractable and should not be shared publicly. For production deployments, always route requests through a trusted backend proxy.",
+                    text = "Security Notice: An API key entered and stored on-device or in a prototype APK cannot be considered completely secret if the APK is decompiled. For production, always use a trusted backend proxy.",
                     style = MaterialTheme.typography.labelSmall,
                     color = ZiaAmberWarning
                 )
-
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = apiKeyDraft,
                     onValueChange = { apiKeyDraft = it },
-                    label = { Text("Optional Custom Gemini API Key Override (Leave blank for built-in)") },
+                    label = { Text("Optional Custom API Key Override (Leave blank for built-in)") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                     modifier = Modifier
@@ -778,80 +814,40 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
 
-        // 5. Optional Notification Reader & Permissions Audit
-        item {
-            ControlSectionCard(
-                title = "5. Optional Notification Reader & Permissions",
-                subtitle = "Notifications are never uploaded. OTPs are automatically redacted."
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Enable Local Notification Reader",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = ZiaTextPrimary
-                        )
-                        Text(
-                            text = if (notificationAccessGranted) {
-                                "System Notification Listener Permission: GRANTED"
-                            } else {
-                                "System Notification Listener Permission: NOT GRANTED"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (notificationAccessGranted) ZiaEmeraldOnline else ZiaAmberWarning
-                        )
-                    }
-                    Switch(
-                        checked = settings.notificationReaderEnabled,
-                        onCheckedChange = onToggleNotificationReader,
-                        modifier = Modifier.testTag("notification_reader_switch")
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(
-                        onClick = onOpenNotificationAccessSettings,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Notification Access")
-                    }
-                    OutlinedButton(
-                        onClick = onOpenAppPermissionSettings,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("App Permissions")
-                    }
-                }
-            }
+@Composable
+private fun PrivacySwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    tag: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = ZiaTextPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = ZiaTextSecondary
+            )
         }
-
-        // 6. Step-by-Step Phone-Only Build, Installation & Release Signing Guide (Hinglish)
-        item {
-            ControlSectionCard(
-                title = "6. Phone-Only APK Installation & Release Signing Guide",
-                subtitle = "Beginner-friendly Hinglish documentation for Redmi 9 (Android 10)"
-            ) {
-                Text(
-                    text = "• Mobile Environment Assessment:\n" +
-                        "  Acode phone par code edit karne ke liye accha hai, par usme native Kotlin + Jetpack Compose compile karne wala Android SDK/Gradle toolchain nahi hota. Isliye aapka yeh ZIA AI project Cloud Android Gradle Build System par compile ho raha hai.\n\n" +
-                        "• Phone Par APK Install Kaise Karein:\n" +
-                        "  1. AI Studio ke top-right Settings / Export menu se 'Download APK' chunein.\n" +
-                        "  2. Redmi 9 (Android 10) ke Files app mein downloaded APK par tap karein aur 'Install from this source' allow karein.\n" +
-                        "  3. App open karke Push-to-Talk ya Offline Commands test karein.\n\n" +
-                        "• Release Signing Guidance (Safe Practice):\n" +
-                        "  Play Store ya public release ke liye apna private `.jks` keystore kabhi bhi code repository ya chat mein share na karein. Hamesha environment variables (`KEYSTORE_PATH`, `STORE_PASSWORD`, `KEY_PASSWORD`) ya Android Studio / CI signing secrets use karein.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = ZiaTextPrimary
-                )
-            }
-        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.testTag(tag)
+        )
     }
 }

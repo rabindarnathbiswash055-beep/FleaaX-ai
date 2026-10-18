@@ -44,6 +44,39 @@ data class ReminderEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "planner_tasks")
+data class PlannerTaskEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val title: String,
+    val subjectOrTag: String = "Study",
+    val dayOffset: Int = 0, // 0 = Today, 1 = Tomorrow, .. 6
+    val timeSlot: String = "06:00 PM",
+    val recurrence: String = TaskRecurrence.ONCE.name,
+    val durationMinutes: Int = 25,
+    val isCompleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "knowledge_notes")
+data class KnowledgeNoteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val title: String,
+    val content: String,
+    val category: String = NoteCategory.NOTE.name,
+    val languageOrTag: String = "General",
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "gaming_profiles")
+data class GamingProfileEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val gameTitle: String,
+    val sensitivityNotes: String,
+    val matchChecklist: String,
+    val ytIdeaNotes: String,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
 @Dao
 interface ZiaDao {
     // Memory Facts
@@ -87,11 +120,60 @@ interface ZiaDao {
 
     @Query("DELETE FROM reminders")
     suspend fun clearAllReminders()
+
+    // Planner Tasks
+    @Query("SELECT * FROM planner_tasks ORDER BY dayOffset ASC, isCompleted ASC, createdAt DESC")
+    fun getAllPlannerTasks(): Flow<List<PlannerTaskEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlannerTask(task: PlannerTaskEntity)
+
+    @Query("UPDATE planner_tasks SET isCompleted = :completed WHERE id = :id")
+    suspend fun setPlannerTaskCompleted(id: Int, completed: Boolean)
+
+    @Query("DELETE FROM planner_tasks WHERE id = :id")
+    suspend fun deletePlannerTaskById(id: Int)
+
+    @Query("DELETE FROM planner_tasks")
+    suspend fun clearAllPlannerTasks()
+
+    // Knowledge Vault & Code Snippets Library
+    @Query("SELECT * FROM knowledge_notes ORDER BY updatedAt DESC")
+    fun getAllKnowledgeNotes(): Flow<List<KnowledgeNoteEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertKnowledgeNote(note: KnowledgeNoteEntity)
+
+    @Query("DELETE FROM knowledge_notes WHERE id = :id")
+    suspend fun deleteKnowledgeNoteById(id: Int)
+
+    @Query("DELETE FROM knowledge_notes")
+    suspend fun clearAllKnowledgeNotes()
+
+    // Gaming Profiles
+    @Query("SELECT * FROM gaming_profiles ORDER BY updatedAt DESC")
+    fun getAllGamingProfiles(): Flow<List<GamingProfileEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGamingProfile(profile: GamingProfileEntity)
+
+    @Query("DELETE FROM gaming_profiles WHERE id = :id")
+    suspend fun deleteGamingProfileById(id: Int)
+
+    @Query("DELETE FROM gaming_profiles")
+    suspend fun clearAllGamingProfiles()
 }
 
 @Database(
-    entities = [MemoryFactEntity::class, ChatMessageEntity::class, ReminderEntity::class],
-    version = 1,
+    entities = [
+        MemoryFactEntity::class,
+        ChatMessageEntity::class,
+        ReminderEntity::class,
+        PlannerTaskEntity::class,
+        KnowledgeNoteEntity::class,
+        GamingProfileEntity::class
+    ],
+    version = 2,
     exportSchema = false
 )
 abstract class ZiaDatabase : RoomDatabase() {
@@ -120,6 +202,9 @@ class ZiaRepository(private val dao: ZiaDao) {
     val memoryFacts: Flow<List<MemoryFactEntity>> = dao.getAllMemoryFacts()
     val chatMessages: Flow<List<ChatMessageEntity>> = dao.getAllChatMessages()
     val reminders: Flow<List<ReminderEntity>> = dao.getAllReminders()
+    val plannerTasks: Flow<List<PlannerTaskEntity>> = dao.getAllPlannerTasks()
+    val knowledgeNotes: Flow<List<KnowledgeNoteEntity>> = dao.getAllKnowledgeNotes()
+    val gamingProfiles: Flow<List<GamingProfileEntity>> = dao.getAllGamingProfiles()
 
     suspend fun ensureStarterDataSeeded() {
         val currentMessages = dao.getAllChatMessages().first()
@@ -127,10 +212,10 @@ class ZiaRepository(private val dao: ZiaDao) {
             dao.insertChatMessage(
                 ChatMessageEntity(
                     isUser = false,
-                    text = "Namaste & Hello! Main ZIA AI hoon — aapki personal multilingual voice assistant (English, Hinglish, Banglish, aur বাংলা).\n\n" +
-                        "• Offline Commands: \"Volume 60% karo\", \"7:30 ka alarm lagao\", \"Open YouTube\", \"Wi-Fi settings kholo\", \"Remind me to practice Kotlin\".\n" +
-                        "• Coding & Reasoning: Online hone par Gemini Cloud AI se complex questions aur code explanations puch sakte hain.\n" +
-                        "• Privacy First: Aapki memory phone par local rehti hai aur har sensitive phone action se pehle Confirmation Preview dikhta hai.",
+                    text = "Namaste & Hello! Main ZIA AI hoon — aapki personal multilingual voice & productivity assistant (English, Hinglish, Banglish, aur বাংলা).\n\n" +
+                        "• Offline Commands: \"Volume 60% karo\", \"7:30 ka alarm lagao\", \"Open YouTube\", \"Wi-Fi settings kholo\".\n" +
+                        "• Workspace Hub: Daily Study Planner & Focus Timer, Coding Lab & Snippet Library, Gaming Companion, aur Personal Knowledge Vault + Smart Search.\n" +
+                        "• Privacy First: Aapki memory phone par local rehti hai aur har sensitive action se pehle Confirmation Preview dikhta hai.",
                     languageCode = AssistantLanguage.AUTO_MIXED.code,
                     engineSource = EngineSource.LOCAL_ASSISTANT.name
                 )
@@ -143,21 +228,21 @@ class ZiaRepository(private val dao: ZiaDao) {
                 MemoryFactEntity(
                     key = "Preferred Languages",
                     value = "Hinglish, Banglish, English & বাংলা",
-                    category = "Language"
+                    category = "Preference"
                 )
             )
             dao.insertMemoryFact(
                 MemoryFactEntity(
-                    key = "Coding Focus",
-                    value = "Kotlin & Jetpack Compose Android Development",
-                    category = "Skill"
+                    key = "Favourite Command",
+                    value = "Hey ZIA, 7:30 ka alarm lagao aur Focus Timer start karo",
+                    category = "Favourite Command"
                 )
             )
             dao.insertMemoryFact(
                 MemoryFactEntity(
-                    key = "Target Device Profile",
-                    value = "Redmi 9 (Android 10 · 6 GB RAM) Optimized",
-                    category = "System"
+                    key = "Project Note",
+                    value = "ZIA AI Modular Hybrid Voice Assistant for Redmi 9 (Android 10 · 6 GB RAM)",
+                    category = "Project Note"
                 )
             )
         }
@@ -168,6 +253,62 @@ class ZiaRepository(private val dao: ZiaDao) {
                 ReminderEntity(
                     title = "Test ZIA push-to-talk in Hinglish & Banglish",
                     scheduledTimeText = "Today · 6:00 PM"
+                )
+            )
+        }
+
+        val currentTasks = dao.getAllPlannerTasks().first()
+        if (currentTasks.isEmpty()) {
+            dao.insertPlannerTask(
+                PlannerTaskEntity(
+                    title = "Kotlin Coroutines & StateFlow Revision",
+                    subjectOrTag = "Android Study",
+                    dayOffset = 0,
+                    timeSlot = "07:00 PM",
+                    recurrence = TaskRecurrence.DAILY.name,
+                    durationMinutes = 25
+                )
+            )
+            dao.insertPlannerTask(
+                PlannerTaskEntity(
+                    title = "Data Structures Practice (Arrays & HashMaps)",
+                    subjectOrTag = "CS Fundamentals",
+                    dayOffset = 1,
+                    timeSlot = "08:30 PM",
+                    recurrence = TaskRecurrence.WEEKDAYS.name,
+                    durationMinutes = 45
+                )
+            )
+        }
+
+        val currentNotes = dao.getAllKnowledgeNotes().first()
+        if (currentNotes.isEmpty()) {
+            dao.insertKnowledgeNote(
+                KnowledgeNoteEntity(
+                    title = "Jetpack Compose State Hoisting Snippet",
+                    content = "@Composable\nfun CounterRow(count: Int, onIncrement: () -> Unit) {\n    Row(verticalAlignment = Alignment.CenterVertically) {\n        Text(\"Count: \$count\")\n        Button(onClick = onIncrement) { Text(\"+1\") }\n    }\n}",
+                    category = NoteCategory.CODE_SNIPPET.name,
+                    languageOrTag = "Kotlin"
+                )
+            )
+            dao.insertKnowledgeNote(
+                KnowledgeNoteEntity(
+                    title = "Redmi 9 (6 GB RAM) Performance Checklist",
+                    content = "1. Keep animations single-layer Canvas.\n2. Use Room Flow queries on Dispatchers.IO.\n3. Avoid background wake-locks; use Push-to-Talk.",
+                    category = NoteCategory.PROJECT_IDEA.name,
+                    languageOrTag = "Architecture"
+                )
+            )
+        }
+
+        val currentGaming = dao.getAllGamingProfiles().first()
+        if (currentGaming.isEmpty()) {
+            dao.insertGamingProfile(
+                GamingProfileEntity(
+                    gameTitle = "BGMI / Mobile Tactical FPS (Redmi 9 Profile)",
+                    sensitivityNotes = "Camera: 120% · ADS Red Dot: 55% · 3x Scope: 26% · Gyroscope: 280% (Smooth + Extreme/Ultra Frame Rate)",
+                    matchChecklist = "[x] Clear background cache before match\n[x] Disable auto-brightness\n[x] Check ping < 50ms & earphones mic",
+                    ytIdeaNotes = "Title: Redmi 9 (6GB RAM) Smooth Gameplay + Zero Lag Sensitivity Guide 2026!\nThumbnail Concept: Split screen FPS counter + sensitivity sliders with neon cyan glow."
                 )
             )
         }
@@ -183,7 +324,7 @@ class ZiaRepository(private val dao: ZiaDao) {
             return SanitizationResult(
                 isSafe = false,
                 sanitizedText = "",
-                blockedReasonHinglish = "Local Memory Opt-Out ON hai. Memory save karne ke liye Memory screen ya Settings mein 'Save Local Preferences' enable karein."
+                blockedReasonHinglish = "Local Memory Opt-Out ON hai. Memory save karne ke liye Memory ya Privacy Center mein 'Save Local Preferences' enable karein."
             )
         }
         val check = PrivacyGuard.validateMemoryPreference(key, value)
@@ -260,9 +401,85 @@ class ZiaRepository(private val dao: ZiaDao) {
 
     suspend fun deleteReminder(id: Int) = dao.deleteReminderById(id)
 
+    // Planner Tasks CRUD
+    suspend fun addPlannerTask(
+        title: String,
+        subjectOrTag: String,
+        dayOffset: Int,
+        timeSlot: String,
+        recurrence: TaskRecurrence,
+        durationMinutes: Int
+    ) {
+        dao.insertPlannerTask(
+            PlannerTaskEntity(
+                title = title.trim().take(120),
+                subjectOrTag = subjectOrTag.trim().take(40).ifEmpty { "Study" },
+                dayOffset = dayOffset.coerceIn(0, 6),
+                timeSlot = timeSlot.trim().take(30).ifEmpty { "06:00 PM" },
+                recurrence = recurrence.name,
+                durationMinutes = durationMinutes.coerceIn(5, 180)
+            )
+        )
+    }
+
+    suspend fun togglePlannerTask(id: Int, completed: Boolean) =
+        dao.setPlannerTaskCompleted(id, completed)
+
+    suspend fun deletePlannerTask(id: Int) = dao.deletePlannerTaskById(id)
+
+    // Knowledge Vault & Code Snippets CRUD
+    suspend fun saveKnowledgeNote(
+        title: String,
+        content: String,
+        category: NoteCategory,
+        languageOrTag: String
+    ): SanitizationResult {
+        val check = PrivacyGuard.validateMemoryPreference(title, content.take(180))
+        if (!check.isSafe) return check
+        dao.insertKnowledgeNote(
+            KnowledgeNoteEntity(
+                title = title.trim().take(100),
+                content = content.trim().take(4000),
+                category = category.name,
+                languageOrTag = languageOrTag.trim().take(40).ifEmpty { "General" }
+            )
+        )
+        return SanitizationResult(isSafe = true, sanitizedText = content.trim())
+    }
+
+    suspend fun updateKnowledgeNote(note: KnowledgeNoteEntity) {
+        dao.insertKnowledgeNote(note.copy(updatedAt = System.currentTimeMillis()))
+    }
+
+    suspend fun deleteKnowledgeNote(id: Int) = dao.deleteKnowledgeNoteById(id)
+
+    // Gaming Profiles CRUD
+    suspend fun saveGamingProfile(
+        id: Int = 0,
+        gameTitle: String,
+        sensitivityNotes: String,
+        matchChecklist: String,
+        ytIdeaNotes: String
+    ) {
+        dao.insertGamingProfile(
+            GamingProfileEntity(
+                id = id,
+                gameTitle = gameTitle.trim().take(80),
+                sensitivityNotes = sensitivityNotes.trim().take(600),
+                matchChecklist = matchChecklist.trim().take(600),
+                ytIdeaNotes = ytIdeaNotes.trim().take(800)
+            )
+        )
+    }
+
+    suspend fun deleteGamingProfile(id: Int) = dao.deleteGamingProfileById(id)
+
     suspend fun wipeAllLocalData() {
         dao.clearAllMemoryFacts()
         dao.clearAllChatMessages()
         dao.clearAllReminders()
+        dao.clearAllPlannerTasks()
+        dao.clearAllKnowledgeNotes()
+        dao.clearAllGamingProfiles()
     }
 }

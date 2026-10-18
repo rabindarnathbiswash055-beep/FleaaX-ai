@@ -25,10 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,10 +53,9 @@ import com.example.ui.ZiaAssistantViewModel
 import com.example.ui.ZiaDestination
 import com.example.ui.screens.ChatScreen
 import com.example.ui.screens.HomeScreen
-import com.example.ui.screens.MemoryScreen
-import com.example.ui.screens.OfflineModeScreen
 import com.example.ui.screens.QuickActionsScreen
 import com.example.ui.screens.SettingsScreen
+import com.example.ui.screens.WorkspaceHubScreen
 import com.example.ui.theme.ZiaAITheme
 import com.example.ui.theme.ZiaAcousticCyan
 import com.example.ui.theme.ZiaCardSurface
@@ -90,13 +88,15 @@ fun ZiaMainApp(
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val memoryFacts by viewModel.memoryFacts.collectAsStateWithLifecycle()
     val reminders by viewModel.reminders.collectAsStateWithLifecycle()
+    val plannerTasks by viewModel.plannerTasks.collectAsStateWithLifecycle()
+    val knowledgeNotes by viewModel.knowledgeNotes.collectAsStateWithLifecycle()
+    val gamingProfiles by viewModel.gamingProfiles.collectAsStateWithLifecycle()
     val recentNotifications by viewModel.recentNotifications.collectAsStateWithLifecycle()
     val isListening by viewModel.isListening.collectAsStateWithLifecycle()
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle()
     val partialTranscript by viewModel.partialTranscript.collectAsStateWithLifecycle()
     val audioLevelRms by viewModel.audioLevelRms.collectAsStateWithLifecycle()
 
-    // Ensure hardware back button on secondary tabs returns cleanly to HOME
     BackHandler(enabled = transient.currentDestination != ZiaDestination.HOME) {
         viewModel.navigateTo(ZiaDestination.HOME)
     }
@@ -134,7 +134,6 @@ fun ZiaMainApp(
                 }
 
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Dismissible Status / Feedback Banner
                     AnimatedVisibility(visible = !transient.statusBannerHinglish.isNullOrBlank()) {
                         Surface(
                             color = ZiaCardSurface,
@@ -180,6 +179,7 @@ fun ZiaMainApp(
                                 partialTranscript = partialTranscript,
                                 audioLevelRms = audioLevelRms,
                                 isNetworkOnline = transient.isNetworkOnline,
+                                performanceTelemetry = transient.performanceTelemetry,
                                 latestMessages = chatMessages,
                                 pendingAction = transient.pendingConfirmationAction,
                                 onSelectLanguage = viewModel::setLanguage,
@@ -190,6 +190,7 @@ fun ZiaMainApp(
                                 onConfirmAction = viewModel::confirmAndExecutePendingAction,
                                 onCancelAction = viewModel::cancelPendingAction,
                                 onNavigate = viewModel::navigateTo,
+                                onOpenWorkspaceSubTab = viewModel::selectWorkspaceTab,
                                 onShowBanner = viewModel::showBanner
                             )
 
@@ -203,9 +204,59 @@ fun ZiaMainApp(
                                 onStopVoice = viewModel::stopVoiceListening,
                                 onSubmitText = viewModel::submitUserMessage,
                                 onSpeakMessage = viewModel::speakMessageAloud,
+                                onSaveMessageToVault = viewModel::saveNoteToKnowledgeVault,
                                 onConfirmAction = viewModel::confirmAndExecutePendingAction,
                                 onCancelAction = viewModel::cancelPendingAction,
                                 onClearChat = viewModel::clearChatHistoryOnly,
+                                onShowBanner = viewModel::showBanner
+                            )
+
+                            ZiaDestination.WORKSPACE -> WorkspaceHubScreen(
+                                activeSubTab = transient.activeWorkspaceTab,
+                                onSelectSubTab = viewModel::selectWorkspaceTab,
+                                settings = settings,
+                                plannerTasks = plannerTasks,
+                                knowledgeNotes = knowledgeNotes,
+                                gamingProfiles = gamingProfiles,
+                                memoryFacts = memoryFacts,
+                                pendingAction = transient.pendingConfirmationAction,
+                                focusTimerSeconds = transient.focusTimerSecondsRemaining,
+                                focusTimerRunning = transient.focusTimerRunning,
+                                focusSessionLabel = transient.focusSessionLabel,
+                                selectedSafFile = transient.selectedSafFile,
+                                smartSearchResult = transient.smartSearchResult,
+                                selectedScreenshotUri = transient.selectedGameplayScreenshotUri,
+                                screenshotAnalysisResult = transient.screenshotAnalysisResult,
+                                generatedGamingPackText = transient.generatedGamingPackText,
+                                onStartFocusTimer = viewModel::startFocusTimer,
+                                onPauseResumeFocusTimer = viewModel::pauseOrResumeFocusTimer,
+                                onResetFocusTimer = viewModel::resetFocusTimer,
+                                onAddPlannerTask = viewModel::addPlannerTask,
+                                onTogglePlannerTask = viewModel::togglePlannerTask,
+                                onDeletePlannerTask = viewModel::deletePlannerTask,
+                                onRequestAction = viewModel::requestActionWithConfirmationGate,
+                                onConfirmAction = viewModel::confirmAndExecutePendingAction,
+                                onCancelAction = viewModel::cancelPendingAction,
+                                onGenerateAndSaveCodeSnippet = viewModel::generateAndSaveCodeSnippet,
+                                onSendPromptToChat = { prompt ->
+                                    viewModel.navigateTo(ZiaDestination.CHAT)
+                                    viewModel.submitUserMessage(prompt)
+                                },
+                                onSafFilePicked = viewModel::onSafFileSelected,
+                                onSummarizeSafFile = viewModel::summarizeSafFileToVault,
+                                onSaveVaultNote = viewModel::saveNoteToKnowledgeVault,
+                                onDeleteVaultNote = viewModel::deleteKnowledgeNote,
+                                onRunSmartSearch = viewModel::runSmartSearch,
+                                onSaveGamingProfile = viewModel::saveGamingProfile,
+                                onDeleteGamingProfile = viewModel::deleteGamingProfile,
+                                onGenerateGamingPack = viewModel::generateYouTubeGamingPack,
+                                onScreenshotPicked = viewModel::onGameplayScreenshotSelected,
+                                onAnalyzeScreenshot = viewModel::analyzeSelectedScreenshotWithCloudConsent,
+                                onToggleMemorySaving = viewModel::setMemorySavingEnabled,
+                                onAddMemoryFact = viewModel::addOrUpdateMemoryFact,
+                                onEditMemoryFact = viewModel::editExistingMemoryFact,
+                                onDeleteMemoryFact = viewModel::deleteMemoryFact,
+                                onExportMemoryText = viewModel::exportMemoryAndVaultAsText,
                                 onShowBanner = viewModel::showBanner
                             )
 
@@ -232,43 +283,30 @@ fun ZiaMainApp(
                                 }
                             )
 
-                            ZiaDestination.MEMORY -> MemoryScreen(
-                                memoryFacts = memoryFacts,
-                                settings = settings,
-                                pendingAction = transient.pendingConfirmationAction,
-                                onToggleMemorySaving = viewModel::setMemorySavingEnabled,
-                                onAddMemoryFact = viewModel::addOrUpdateMemoryFact,
-                                onEditMemoryFact = viewModel::editExistingMemoryFact,
-                                onDeleteMemoryFact = viewModel::deleteMemoryFact,
-                                onRequestWipeAll = {
-                                    viewModel.requestActionWithConfirmationGate(PendingAction.ClearAllMemory())
-                                },
-                                onConfirmAction = viewModel::confirmAndExecutePendingAction,
-                                onCancelAction = viewModel::cancelPendingAction
-                            )
-
-                            ZiaDestination.OFFLINE -> OfflineModeScreen(
-                                settings = settings,
-                                isNetworkOnline = transient.isNetworkOnline,
-                                hardwareAudit = transient.hardwareAudit,
-                                onToggleForceOffline = viewModel::setForceOfflineMode,
-                                onToggleWakeWordSession = viewModel::setWakeWordSessionEnabled
-                            )
-
                             ZiaDestination.SETTINGS -> SettingsScreen(
                                 settings = settings,
                                 notificationAccessGranted = transient.notificationPermissionGranted,
+                                hardwareAudit = transient.hardwareAudit,
+                                performanceTelemetry = transient.performanceTelemetry,
+                                pendingAction = transient.pendingConfirmationAction,
                                 onSelectLanguage = viewModel::setLanguage,
                                 onSelectPersonality = viewModel::setPersonality,
+                                onSelectAvatarTheme = viewModel::setAvatarTheme,
+                                onSelectResponseLength = viewModel::setResponseLength,
+                                onSaveCustomGreeting = viewModel::setCustomGreeting,
+                                onToggleVoiceInput = viewModel::setVoiceInputEnabled,
                                 onToggleVoiceOutput = viewModel::setVoiceOutputEnabled,
                                 onSpeechRateChange = viewModel::setSpeechRate,
                                 onSpeechPitchChange = viewModel::setSpeechPitch,
                                 onTestVoiceClick = {
-                                    viewModel.speakMessageAloud(
-                                        "Namaste! Main ZIA AI hoon. Your Voice, Your World, Your ZIA."
-                                    )
+                                    viewModel.speakMessageAloud(settings.customGreeting)
                                 },
+                                onToggleMemorySaving = viewModel::setMemorySavingEnabled,
                                 onToggleCloudConsent = viewModel::setCloudAiConsentEnabled,
+                                onToggleCloudPersonalContext = viewModel::setCloudPersonalContextConsent,
+                                onToggleCloudDocUpload = viewModel::setCloudDocumentUploadConsent,
+                                onToggleForceOffline = viewModel::setForceOfflineMode,
+                                onToggleWakeWordSession = viewModel::setWakeWordSessionEnabled,
                                 onToggleNotificationReader = viewModel::setNotificationReaderEnabled,
                                 onOpenNotificationAccessSettings = {
                                     viewModel.requestActionWithConfirmationGate(
@@ -280,6 +318,13 @@ fun ZiaMainApp(
                                         PendingAction.OpenSystemSettings("APP_DETAILS")
                                     )
                                 },
+                                onRequestWipeAllData = {
+                                    viewModel.requestActionWithConfirmationGate(
+                                        PendingAction.ClearAllMemory()
+                                    )
+                                },
+                                onConfirmAction = viewModel::confirmAndExecutePendingAction,
+                                onCancelAction = viewModel::cancelPendingAction,
                                 onSaveCustomApiKey = viewModel::setCustomGeminiApiKey
                             )
                         }
@@ -293,10 +338,9 @@ fun ZiaMainApp(
 private fun destinationIcon(dest: ZiaDestination): ImageVector = when (dest) {
     ZiaDestination.HOME -> Icons.Default.Home
     ZiaDestination.CHAT -> Icons.AutoMirrored.Filled.Chat
+    ZiaDestination.WORKSPACE -> Icons.Default.DashboardCustomize
     ZiaDestination.ACTIONS -> Icons.Default.Bolt
-    ZiaDestination.MEMORY -> Icons.Default.Memory
-    ZiaDestination.OFFLINE -> Icons.Default.CloudOff
-    ZiaDestination.SETTINGS -> Icons.Default.Settings
+    ZiaDestination.SETTINGS -> Icons.Default.Security
 }
 
 @Composable

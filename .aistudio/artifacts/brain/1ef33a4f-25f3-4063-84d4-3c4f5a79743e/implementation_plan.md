@@ -1,6 +1,6 @@
-# ZIA AI — Native Android Multilingual Hybrid Voice Assistant
+# ZIA AI — Ultimate Feature Expansion Plan
 
-**ZIA AI** (*"Your Voice. Your World. Your ZIA."*) is a privacy-first, native Android personal voice and chat assistant designed for smooth execution on Android 10+ devices (such as Redmi 9 with 6 GB RAM). It combines a deterministic offline command engine with optional Gemini cloud reasoning, an interactive anime-style girl character avatar with lightweight reactive state rings, multilingual speech and voice synthesis (English, Hinglish, Banglish, and বাংলা), confirmation-gated phone actions, and transparent local-only preference memory.
+**ZIA AI** (*"Your Voice. Your World. Your ZIA."*) is upgrading from a core hybrid voice assistant into a comprehensive, modular, privacy-first personal workspace for Android 10+ (Redmi 9 · 6 GB RAM). This expansion preserves 100% of the existing working voice, chat, offline command, and anime avatar functionality while adding an integrated **Workspace Hub** (Daily Planner & Focus Timer, Coding Lab & Snippet Library, Gaming Companion, Knowledge Vault & Smart Search) and a dedicated **Privacy Control Center**.
 
 ---
 
@@ -8,71 +8,63 @@
 
 > [!IMPORTANT]
 > **Confirmed Choices from Phase 1**
-> - **Delivery Scope**: Build the complete, full-featured ZIA AI application across all core screens and capabilities in one verified release, compiled directly via our cloud Android build environment into an installable APK (no PC or local Acode build toolchain hurdles).
-> - **Hybrid Cloud AI Provider**: Built-in **Gemini API (`gemini-3.5-flash`)** configured via `BuildConfig.GEMINI_API_KEY` alongside a user-configurable custom API key / endpoint override and an explicit cloud-data consent toggle.
-> - **Avatar Visual Identity**: Custom anime-style female AI assistant character portrait paired with lightweight, battery-friendly Jetpack Compose Canvas state rings and waveforms for `Idle`, `Listening`, `Thinking`, `Speaking`, and `Unavailable` states.
+> - **Delivery Strategy**: Deliver all expansion modules (Phases A through J) in one cohesive, verified build on top of the existing working ZIA AI codebase without breaking or removing any existing features.
+> - **Multimodal Gaming Analysis & Cited Smart Search**: Enable Android's zero-permission Photo Picker (`PickVisualMedia`) for user-selected gameplay screenshot analysis (gated by an explicit cloud upload confirmation) and Gemini-powered web search with source citations alongside instant offline local vault search.
+> - **Navigation Architecture**: Maintain 5 ergonomic bottom navigation tabs (`Home`, `Chat`, `Workspace`, `Controls`, `Privacy & Settings`), where the new **`Workspace` Hub Tab** hosts clean pill-switched sub-modules for **Planner & Focus**, **Coding Lab**, **Gaming Companion**, **Knowledge Vault & Search**, and **Memory**.
 
 > [!NOTE]
-> **Android 10 & Mobile Hardware Feasibility Assessment (Redmi 9 / 6 GB RAM)**
-> - **Push-to-Talk vs. Always-On Hotword**: Standard Android `SpeechRecognizer` is not a continuous low-power hardware DSP hotword engine. To prevent severe battery drain, OEM background process kills on MIUI/Android 10, and unintended microphone recording, ZIA AI uses **Push-to-Talk** on the Home and Chat screens with a visible listening indicator and instant stop button, plus an interactive **Wake-Word ("Hey ZIA") Foreground Session Mode** and hardware/battery feasibility diagnostics screen.
-> - **Least-Privilege Phone Controls**: Actions such as placing calls, sending SMS, setting alarms, opening apps, capturing photos, or toggling Wi-Fi/Bluetooth use documented Android system intents, panels, and explicit user **Confirmation Preview Cards** rather than silent background execution.
+> **Transparency, Safety & Redmi 9 Hardware Guardrails**
+> - **No Fake Emotional States or Hidden Background Actions**: ZIA's personalities (`Friendly`, `Professional`, `Funny`, `Study Buddy`, `Gaming Assistant`, `Concise`) and anime avatar themes are clearly presented as user-configurable UI/UX styles—never as factual internal emotions.
+> - **OS Permission Honesty**: In the **Privacy Control Center**, disabling an in-app toggle immediately stops ZIA from using that feature, and clearly explains that revoking an actual Android OS permission requires opening the system App Permissions screen (via a one-tap shortcut).
+> - **Fair-Play Gaming Companion**: Provides legitimate sensitivity profiles, match checklists, YouTube creator tools, and manual user-picked screenshot analysis—never promising automatic background gameplay recognition or anti-cheat bypasses.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: ZIA AI acts as a bilingual/multilingual daily companion and device controller. Users can speak or type in **English, Hinglish, Banglish, or বাংলা (Bengali)** to launch installed apps, adjust media/ring/alarm volume streams, prepare calls or SMS messages with confirmation previews, create local reminders and system alarms, inspect user-selected files via the Storage Access Framework, control active media playback, get coding explanations/snippets, and converse with ZIA in 4 distinct personalities (`Friendly`, `Professional`, `Concise`, `Playful`).
-- **Target Audience / Persona**: Mobile-first users in South Asia and beyond running mid-range Android 10+ smartphones who want a responsive, culturally fluent (Hinglish/Banglish/Bengali/English) assistant that respects device resources and personal privacy.
-- **Key Value**: Works reliably offline for device commands, reminders, volume/settings controls, and local assistant help, while seamlessly upgrading to cloud AI (`gemini-3.5-flash`) for complex reasoning and coding tasks only when online and explicitly permitted by the user.
+- **What It Does**: Expands ZIA AI into an all-in-one multilingual (English, Hinglish, Banglish, বাংলা) companion that combines offline device control and voice assistance with a **Daily Study Planner & Pomodoro Focus Timer**, a **Coding Assistant & Local Snippet Library**, a **Gaming Companion & YouTube Creator Studio**, a **Personal Knowledge Vault with SAF Document Summarization**, **Offline + Online Smart Search**, and a **Privacy Control Center**.
+- **Target Audience / Persona**: Students, mobile developers, gamers, and creators using mid-range Android 10 smartphones (such as Redmi 9) who need a single lightweight, battery-conscious native APK for productivity, coding, study sessions, and device automation.
+- **Key Value**: Every new productivity module works offline first using local SQLite persistence, while seamlessly offering opt-in cloud AI acceleration (code explanation, document summarization, screenshot analysis, and cited search) only when online and explicitly authorized.
 
 ---
 
 ## 2. User Experience & Visual Design
 
 ### Key User Flows
-1. **Home & Anime Avatar Hub**:
-   - Displays a top status bar showing active connectivity (`Online · Hybrid AI`, `Offline · Local Engine Only`, or `Cloud Opt-Out Active`), selected language pill (`EN`, `Hinglish`, `Banglish`, `বাংলা`), and active personality badge.
-   - Centerpiece **Anime Character Avatar Stage** displaying ZIA's custom anime portrait framed by lightweight, state-driven radial Canvas rings (`Idle` breathing aura, `Listening` cyan acoustic pulse, `Thinking` orbital violet arc, `Speaking` harmonic equalizer bars, `Unavailable` amber muted ring) and a clear disclaimer badge (*"AI Assistant Graphic · Push-to-Talk"*).
-   - Bottom push-to-talk microphone dock with explicit `Stop Listening` / `Mute TTS` controls, quick text input bar, and recent conversation card preview with a **Confirmation Preview Modal** whenever ZIA proposes a sensitive phone action.
-2. **Full Chat & Coding Helper Flow**:
-   - Threaded bilingual/multilingual conversation history with source badges (`Local Engine`, `On-Device Assistant`, `Gemini Cloud`), syntax-highlighted/copyable code snippet cards, voice replay buttons per message, and one-tap confirmation cards for pending phone actions.
-3. **Quick Actions & Phone Controls Center**:
-   - Categorized interactive grid for **App Launcher** (search and launch installed apps or test package intents with graceful fallback), **Volume & System Panels** (live sliders for Media, Ring, Notification, and Alarm volume + one-tap Wi-Fi/Bluetooth/Sound settings panels), **Calls & SMS Composer** (prefilled dialer/SMS with mandatory confirmation preview), **Alarms & Local Reminders**, **Media Playback Controller** (Play/Pause/Next/Previous + active media session info), **Camera & SAF File Inspector** (inspect user-picked text/code file metadata and content safely), and **Coding Helper Templates**.
-4. **Memory & Privacy Vault**:
-   - View, add, edit, or delete explicit assistant preferences (e.g., preferred name, favorite language, coding language, response style) stored locally on-device. Includes a master **"Save Assistant Memory"** opt-out switch, **"Allow Cloud AI Queries"** consent gate, and one-tap **"Wipe All Local Memory & Chat History"**.
-5. **Offline Mode & Diagnostics Hub**:
-   - Live capability matrix comparing what works 100% offline vs. what requires internet, plus a dedicated **Wake-Word ("Hey ZIA") & On-Device LLM Hardware Evaluator** that inspects actual device RAM/storage (`ActivityManager.MemoryInfo`, `StatFs`) on the user's phone and explains Android 10 battery/microphone rules in friendly Hinglish + English.
-6. **Settings & Notification Reader Setup**:
-   - Configure language mode (`Auto-Detect / Mixed`, `English`, `Hinglish`, `Banglish`, `বাংলা`), TTS speech rate & pitch, personality preset, Cloud AI configuration (Built-in Gemini vs. Custom API Key override), Notification Reader toggle with system permission status, and a built-in **Hinglish Build, Privacy & APK Guide**.
+1. **Home & Customizable Anime Avatar Stage**:
+   - Displays live connection status, response latency (`ms`), and app RAM footprint (`MB`), plus quick language chips (`Auto`, `EN`, `Hinglish`, `Banglish`, `বাংলা`).
+   - Users can customize ZIA's **Anime Avatar Theme** (`Sapphire Cyber`, `Violet Neural`, `Emerald Matrix`, `Sunset Rose`), **Custom Greeting**, **Response Length** (`Short`, `Balanced`, `Detailed`), and **Personality** (`Friendly`, `Professional`, `Funny`, `Study Buddy`, `Gaming Assistant`, `Concise`).
+2. **Multilingual Chat with One-Tap "Save to Vault / Code Library"**:
+   - Every assistant reply now includes a **Save to Knowledge Vault** action, and every generated code block (Kotlin, JavaScript, HTML, CSS, Python) includes both **Copy** and **Save to Code Library** actions.
+3. **Workspace Hub Tab (5 Integrated Sub-Modules)**:
+   - **Daily Planner & Focus Timer**: Interactive 7-day calendar strip, study task & schedule creator with recurrence tags (`Once`, `Daily`, `Weekdays`), completion tracking, system alarm handoff, and an interactive **Study Focus Timer** (`25m Study`, `5m Break`, `45m Deep Work`) with integrated media playback controls.
+   - **Coding Lab & Snippet Library**: Dedicated prompt actions for *Explain Concept*, *Debug Error Message*, and *Generate Snippet* (`Kotlin`, `JavaScript`, `HTML/CSS`, `Python`), a searchable local **Code-Notes Library**, and optional **SAF Code File Editor** to load, edit, and copy user-selected files safely.
+   - **Gaming Companion**: Manage favorite games, custom sensitivity/HUD profiles (Camera, ADS, Gyroscope notes), and match checklists; generate **YouTube Gaming Video Ideas, Titles, Descriptions & Thumbnail Concepts**; and run **Manual Gameplay Screenshot Analysis** by picking a screenshot via Android Photo Picker with an explicit cloud-upload confirmation gate.
+   - **Knowledge Vault & Smart Search**: Unified search bar that queries local Memory, Vault Notes, Code Snippets, and Study Tasks 100% offline first, with an optional **Run Cited Online Search** button that clearly separates **Retrieved Facts & Sources** from **AI-Generated Synthesis**. Also supports importing & summarizing user-selected SAF documents with explicit cloud consent.
+   - **Smart Personal Memory**: Search, add, edit, delete, and **Export Local Memory (JSON/Text)**, protected by `PrivacyGuard` and a master enable/disable switch.
+4. **Device Action Center (`Controls` Tab)**:
+   - Streamlined access to installed app launching, Media/Ring/Alarm/Notification volume sliders, Wi-Fi/Bluetooth/Sound/Display system panels, confirmation-gated Call & SMS draft composers, Camera intent, and opt-in Notification Reader.
+5. **Privacy Control Center & Settings (`Privacy & Settings` Tab)**:
+   - Unified dashboard displaying real-time OS permission badges (`Microphone: Granted/Denied`, `Notification Access: Granted/Not Granted`), master toggles for **Cloud AI**, **Personal Context & Document Upload Consent**, **Local Memory**, **Voice Input**, and **Voice Replies**, one-tap **Wipe All Saved Data**, runtime memory/latency diagnostics, and transparent Android 10 permission explanations.
 
 ### Visual Identity & Theme
-- **Aesthetic Direction**: **Cyber-Nocturne Anime Console** — a deep, eye-friendly obsidian dark interface with restrained electric blue and violet accents, crisp glassmorphic cards, and clear status telemetry.
-- **Color Palette & Mood**:
-  - `--background`: `#090B14` (Deep Cosmic Obsidian)
-  - `--surface`: `#121726` (Elevated Midnight Slate)
-  - `--surface-variant`: `#1A2136` (Translucent Card Surface)
-  - `--primary`: `#4F8CFF` (ZIA Electric Sapphire Blue)
-  - `--secondary`: `#8B5CF6` (Neural Violet Accent)
-  - `--tertiary`: `#22D3EE` (Acoustic Cyan for Listening/Voice states)
-  - `--warning` / `--error`: `#F59E0B` (Amber Offline/Permission Alert) / `#EF4444` (Crimson Stop/Delete)
-- **Typography & Hierarchy**:
-  - Locally bundled Google Fonts (`Space Grotesk` for futuristic headers and status telemetry; `Plus Jakarta Sans` for crisp multilingual Latin/Bengali body legibility; `JetBrains Mono` for the Coding Helper and diagnostics).
-- **Interactive Feedback & Motion**:
-  - Lightweight Compose `animateFloatAsState` and `infiniteRepeatable` single-layer Canvas strokes capped at low CPU/GPU overhead so Redmi 9 (Helio G80 / Mali-G52) stays cool and responsive at 60fps.
+- **Aesthetic Direction**: **Cyber-Nocturne Modular Console** — high-contrast obsidian surfaces (`#090B14`, `#121726`, `#1A2136`) with user-selectable avatar accent palettes (`#4F8CFF` Sapphire, `#8B5CF6` Violet, `#10B981` Emerald, `#F43F5E` Sunset Rose).
+- **Typography & Hierarchy**: Bundled `Space Grotesk` for headers and telemetry badges, `Plus Jakarta Sans` for multilingual English/Hinglish/Banglish/Bengali readability, and `JetBrains Mono` for the Coding Lab, sensitivity profiles, and latency metrics.
+- **Interactive Feedback & Motion**: Lightweight single-pass Canvas drawing and smooth pill transitions that consume zero background CPU when idle.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: Hybrid 3-Tier Routing (`LocalCommandEngine` -> `LocalAssistantEngine` -> `RemoteAIProvider`)**
-  - *Chosen Approach*: Every user utterance or text message is first evaluated by `LocalCommandEngine` (deterministic regex + keyword intent parser supporting English, Hinglish, Banglish, and Bengali phrases like *"alarm lagao"*, *"volume kam karo"*, *"open YouTube"*, *"kemon acho"*). If it is not a device command, it checks whether Cloud AI is online and permitted: if yes, it queries `RemoteAIProvider` (`gemini-3.5-flash` with personality, language, and opt-in local memory context); if offline or cloud-disabled, `LocalAssistantEngine` provides helpful offline bilingual responses, coding reference templates, and math/utility answers.
-  - *Why*: Guarantees sub-50ms execution for phone controls without wasting mobile data or API quota, while keeping the app genuinely useful even with zero internet connectivity.
-- **Decision 2: Strict Confirmation Gate for Consequential Phone Actions**
-  - *Chosen Approach*: Whenever a voice or text command triggers a phone call, SMS composition, alarm creation, system setting modification, or data deletion, `ActionExecutor` creates a `PendingAction` object first. The UI presents a **Confirmation Preview Card** showing the exact target, parameters, and permission required before the user taps **Confirm & Execute**.
-  - *Why*: Prevents accidental dialer/message actions from misheard speech recognition and satisfies strict Android security best practices.
-- **Decision 3: Privacy-First Local Storage (Room + DataStore)**
-  - *Chosen Approach*: Assistant memory facts, chat messages, and local reminders are stored strictly on-device in a Room SQLite database and Jetpack DataStore preferences. Passwords, OTPs, tokens, or sensitive patterns are automatically filtered out by a `PrivacyGuard` sanitizer before saving to memory or sending to cloud AI.
-  - *Why*: Directly fulfills the requirement to keep memory local by default, give users full view/edit/delete control, and never upload private notification or personal data.
+- **Decision 1: Provider-Independent Hybrid AI Interface with Multimodal & Search Support**
+  - *Chosen Approach*: Extend `RemoteAIProvider` with structured methods for text reasoning, multimodal image analysis (`analyzeImageWithPrompt`), and grounded search/summarization, all gated by explicit user consent and backed by `LocalAssistantEngine` offline fallbacks.
+  - *Why*: Allows swapping or upgrading cloud/local models without touching UI or ViewModel layers, and guarantees the app never crashes or hangs when offline.
+- **Decision 2: Non-Destructive Room Database Expansion**
+  - *Chosen Approach*: Preserve `MemoryFactEntity`, `ChatMessageEntity`, and `ReminderEntity`, and add `KnowledgeNoteEntity` (for Vault notes, saved AI answers, and code snippets), `PlannerTaskEntity` (for study sessions, schedules, and recurring tasks), and `GamingProfileEntity` (for game sensitivity profiles, checklists, and creator ideas).
+  - *Why*: Keeps all user data structured, searchable offline in under 10ms, and 100% local by default.
+- **Decision 3: Explicit Cloud Upload Confirmation for Documents & Screenshots**
+  - *Chosen Approach*: Before sending any user-selected SAF document text or Photo Picker gameplay screenshot to the cloud AI provider, ZIA checks a dedicated consent gate and displays a clear notice explaining what is being sent. Offline local summarization/inspection remains available without cloud upload.
+  - *Why*: Strictly honors the privacy-first architecture and prevents unintentional data uploads.
 
 ---
 
@@ -81,66 +73,65 @@
 ### Architecture & Component Diagram
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                        ZIA AI — PRESENTATION LAYER                         │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌───────────────────┐  │
-│  │ Home & Anime │ │  Multilingual│ │Quick Actions │ │ Memory, Offline & │  │
-│  │ Avatar Stage │ │Chat & Coding │ │& Phone Panel │ │  Settings Screens │  │
-│  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └─────────┬─────────┘  │
-│         └────────────────┴────────┬───────┴───────────────────┘            │
-│                                   ▼                                        │
-│                    ┌─────────────────────────────┐                         │
-│                    │   ZiaAssistantViewModel     │                         │
-│                    │  (StateFlow<ZiaUiState>)    │                         │
-│                    └──────────────┬──────────────┘                         │
-└───────────────────────────────────┼────────────────────────────────────────┘
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│                     HYBRID ASSISTANT ORCHESTRATOR                          │
-│                                                                            │
-│   User Input (Voice / Text) ──► [ PrivacyGuard Sanitizer ]                 │
-│                                           │                                │
-│         ┌─────────────────────────────────┼───────────────────────┐        │
-│         ▼ (1. Deterministic Match)        ▼ (2. Online & Consent) ▼ (3.Off)│
-│  ┌────────────────────┐        ┌─────────────────────┐  ┌────────────────┐ │
-│  │ LocalCommandEngine │        │  RemoteAIProvider   │  │ LocalAssistant │ │
-│  │ (EN/HI/BN Intents) │        │ (Gemini 3.5 Flash)  │  │ Engine (Rules, │ │
-│  └─────────┬──────────┘        └──────────┬──────────┘  │ Code & Math)   │ │
-│            ▼                              └──────┬──────┴────────┬───────┘ │
-│  ┌────────────────────┐                          ▼               │         │
-│  │  ConfirmationGate  │──► [ ActionExecutor ] ◄──┴───────────────┘         │
-│  └────────────────────┘                                                    │
-└─────────┬──────────────────────────┬───────────────────────────┬───────────┘
-          ▼                          ▼                           ▼
-┌───────────────────┐    ┌───────────────────────┐   ┌───────────────────────┐
-│  SPEECH & MEDIA   │    │  ANDROID SYSTEM APIs  │   │   LOCAL PERSISTENCE   │
-│ • SpeechInput     │    │ • PackageManager Apps │   │ • Room Database       │
-│   (Recognizer)    │    │ • AudioManager Volume │   │   - MemoryFactEntity  │
-│ • SpeechOutput    │    │ • AlarmClock / Dialer │   │   - ChatMessageEntity │
-│   (Android TTS)   │    │ • Settings Panels     │   │   - ReminderEntity    │
-│ • MediaController │    │ • SAF File Picker     │   │ • PreferenceStore     │
-│ • ZiaNotification │    │ • Camera Capture      │   │   (DataStore + OptIn) │
-│   ListenerService │    │ • ConnectivityManager │   │                       │
-└───────────────────┘    └───────────────────────┘   └───────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                        ZIA AI — 5-TAB ADAPTIVE UI LAYER                        │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────┐  ┌──────────┐  ┌─────────┐  │
+│  │   Home   │  │   Chat   │  │   Workspace Hub   │  │ Controls │  │Privacy &│  │
+│  │ & Avatar │  │ & Coding │  │ • Planner & Focus │  │  Center  │  │Settings │  │
+│  │  Stage   │  │  Stream  │  │ • Coding Lab      │  │          │  │ Center  │  │
+│  │          │  │          │  │ • Gaming Companion│  │          │  │         │  │
+│  │          │  │          │  │ • Vault & Search  │  │          │  │         │  │
+│  │          │  │          │  │ • Smart Memory    │  │          │  │         │  │
+│  └────┬─────┘  └────┬─────┘  └─────────┬─────────┘  └────┬─────┘  └────┬────┘  │
+│       └─────────────┴──────────────────┼─────────────────┴─────────────┘       │
+│                                        ▼                                       │
+│                        ┌───────────────────────────────┐                       │
+│                        │     ZiaAssistantViewModel     │                       │
+│                        │ (StateFlow + Latency/RAM Mon) │                       │
+│                        └───────────────┬───────────────┘                       │
+└────────────────────────────────────────┼───────────────────────────────────────┘
+                                         ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                    PROVIDER-INDEPENDENT HYBRID ORCHESTRATOR                    │
+│                                                                                │
+│   Input / File / Image ──► [ PrivacyGuard & Cloud Upload Consent Gate ]        │
+│                                              │                                 │
+│         ┌────────────────────────────────────┼──────────────────────┐          │
+│         ▼ (Offline Commands)                 ▼ (Online + Consent)   ▼ (Offline)│
+│  ┌─────────────────────┐          ┌───────────────────────┐  ┌───────────────┐ │
+│  │ LocalCommandEngine  │          │   RemoteAIProvider    │  │LocalAssistant │ │
+│  │ (EN/HI/BN Intents)  │          │ • Text & Coding       │  │• Code Library │ │
+│  └──────────┬──────────┘          │ • Screenshot Vision   │  │• Gaming Tips  │ │
+│             ▼                     │ • Grounded Web Search │  │• Vault Search │ │
+│  ┌─────────────────────┐          │ • Doc Summarizer      │  │• Study Helper │ │
+│  │  ConfirmationGate   │          └───────────┬───────────┘  └───────┬───────┘ │
+│  │  & ActionExecutor   │                      └───────────┬──────────┘         │
+│  └─────────────────────┘                                  ▼                    │
+│                                          [ Local Room SQLite & DataStore ]     │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Data Model & State
-- **`AvatarState`**: `IDLE`, `LISTENING`, `THINKING`, `SPEAKING`, `UNAVAILABLE`.
-- **`AssistantLanguage`**: `AUTO_MIXED` (English/Hinglish/Banglish), `ENGLISH` (`en-IN`), `HINGLISH` (`hi-IN` / Latin-Hindi hybrid), `BANGLISH` (`bn-IN` / Latin-Bengali hybrid), `BENGALI` (`bn-BD` / `bn-IN`).
-- **`PersonalityStyle`**: `FRIENDLY`, `PROFESSIONAL`, `CONCISE`, `PLAYFUL` — dynamically shapes both local responses and Gemini system instructions.
-- **Room Entities (`ZiaDatabase`)**:
-  - `MemoryFactEntity`: `id`, `key`, `value`, `category`, `updatedAt` (blocks sensitive keys like passwords/OTPs).
-  - `ChatMessageEntity`: `id`, `sender` (`USER` / `ZIA`), `text`, `languageTag`, `sourceEngine` (`LOCAL_COMMAND`, `LOCAL_ASSISTANT`, `GEMINI_CLOUD`), `codeSnippet`, `timestamp`.
-  - `ReminderEntity`: `id`, `title`, `triggerTimeMillis`, `isCompleted`, `createdAt`.
-- **`PendingAction`**: Sealed/structured representation of device actions (`OpenApp`, `DialNumber`, `ComposeSms`, `SetSystemAlarm`, `SetVolume`, `OpenSystemPanel`, `LaunchCamera`, `OpenSafPicker`, `MediaControl`) requiring user confirmation when sensitive.
+- **Expanded `PersonalityStyle`**: `FRIENDLY`, `PROFESSIONAL`, `FUNNY`, `STUDY_BUDDY`, `GAMING_ASSISTANT`, `CONCISE`.
+- **`AvatarThemePreset`**: `SAPPHIRE_CYBER` (`#4F8CFF`), `VIOLET_NEURAL` (`#8B5CF6`), `EMERALD_MATRIX` (`#10B981`), `SUNSET_ROSE` (`#F43F5E`).
+- **`ResponseLengthPreference`**: `SHORT`, `BALANCED`, `DETAILED`.
+- **Room Database Entities (`ZiaDatabase` v2)**:
+  - `MemoryFactEntity`: `id`, `key`, `value`, `category`, `updatedAt`.
+  - `ChatMessageEntity`: `id`, `isUser`, `text`, `languageCode`, `engineSource`, `codeSnippet`, `timestamp`.
+  - `ReminderEntity`: `id`, `title`, `scheduledTimeText`, `isCompleted`, `createdAt`.
+  - `PlannerTaskEntity`: `id`, `title`, `subjectOrTag`, `dayOffset` (`0..6` for 7-day calendar strip), `timeSlot`, `recurrence` (`ONCE`, `DAILY`, `WEEKDAYS`), `durationMinutes`, `isCompleted`, `createdAt`.
+  - `KnowledgeNoteEntity`: `id`, `title`, `content`, `category` (`NOTE`, `AI_ANSWER`, `CODE_SNIPPET`, `PROJECT_IDEA`, `DOC_SUMMARY`), `languageOrTag`, `updatedAt`.
+  - `GamingProfileEntity`: `id`, `gameTitle`, `sensitivityNotes`, `matchChecklist`, `ytIdeaNotes`, `updatedAt`.
+- **`PerformanceMetrics`**: `appUsedRamMb`, `deviceAvailableRamGb`, `lastResponseLatencyMs`, `activeEngineLabel`.
 
 ### Interactive Component & State Mapping
-- **Home & Push-to-Talk Dock**:
-  - Tapping the Microphone button checks `RECORD_AUDIO` permission via `rememberLauncherForActivityResult`, transitions `AvatarState` to `LISTENING`, starts `SpeechInput` with the user's selected locale (`en-IN`, `hi-IN`, `bn-IN`), streams partial recognition text live on-screen, and automatically routes the final transcript through the Hybrid Orchestrator.
-  - If `SpeechRecognizer` is unavailable on the device, ZIA immediately shows a clear Hinglish/English fallback banner and focuses the text input bar.
-- **Confirmation Preview Modal / Card**:
-  - Displays whenever `PendingAction.requiresConfirmation == true` (e.g., calling a number, sending an SMS, setting an alarm, or clearing data). User can edit parameters or tap **Confirm & Launch** or **Cancel**.
-- **Memory Vault & Privacy Controls**:
-  - Users can add custom preferences (e.g., *"Call me Rahul"*, *"Preferred language: Hinglish"*), edit existing rows, delete individual items, or toggle off memory storage entirely. `PrivacyGuard` rejects entries matching credit card, password, token, or OTP patterns with an educational warning.
-- **Notification Reader Service (`ZiaNotificationListenerService`)**:
-  - Declared in `AndroidManifest.xml` with `BIND_NOTIFICATION_LISTENER_SERVICE`. Strictly opt-in: only caches the latest notification summary in memory when the user enables "Read Notifications Aloud" in Settings and grants notification access via `Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS`. Includes a one-tap **Read Latest Notification** and **Revoke Access** shortcut. Never uploads notification text to any server.
+- **Daily Planner & Study Focus Timer**:
+  - Users select a day on the 7-day calendar bar, add study sessions or recurring tasks, toggle completion checkboxes, or launch a live countdown **Focus Session Timer** (`Start`, `Pause`, `Reset`, `25m / 5m / 45m` presets) paired with media session controls.
+- **Coding Lab & Safe File Editor**:
+  - Users can pick a language (`Kotlin`, `JavaScript`, `HTML`, `CSS`, `Python`), enter a concept or error log, and generate/save snippets into the local `KnowledgeNoteEntity` (`CODE_SNIPPET` filter). When editing a user-picked SAF file, changes are held in an interactive editor buffer with one-tap copy/save to the local vault.
+- **Gaming Companion & Screenshot Analyzer**:
+  - Users can create/edit game profiles, generate YouTube Gaming titles/descriptions/thumbnail prompts, or pick a screenshot via `ActivityResultContracts.PickVisualMedia`. Selecting a screenshot shows a preview card and an explicit **"Analyze Gameplay Screenshot with Cloud AI"** confirmation button.
+- **Knowledge Vault & Cited Smart Search**:
+  - Typing a query immediately filters local Memory, Vault Notes, Code Snippets, and Planner Tasks offline. Tapping **"Search Online & Summarize"** queries `RemoteAIProvider` and renders a structured card separating **Retrieved Key Facts & Source Domains** from **ZIA's Generated Summary**.
+- **Privacy Control Center**:
+  - Displays live Android permission states (`ContextCompat.checkSelfPermission` for `RECORD_AUDIO` and `NotificationVault.isNotificationAccessGranted`), interactive switches for every privacy/voice/cloud control, memory export, and confirmation-gated data wipe.

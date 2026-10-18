@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.app.Application
 import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai.DeterministicLocalAssistantEngine
@@ -14,17 +15,27 @@ import com.example.commands.DeterministicLocalCommandEngine
 import com.example.commands.LocalCommandEngine
 import com.example.data.AssistantLanguage
 import com.example.data.AvatarState
+import com.example.data.AvatarThemePreset
 import com.example.data.ChatMessageEntity
 import com.example.data.DataStorePreferenceStore
 import com.example.data.EngineSource
+import com.example.data.GamingProfileEntity
 import com.example.data.InstalledAppItem
+import com.example.data.KnowledgeNoteEntity
 import com.example.data.MemoryFactEntity
+import com.example.data.NoteCategory
 import com.example.data.NotificationSummary
 import com.example.data.PendingAction
+import com.example.data.PerformanceTelemetry
 import com.example.data.PersonalityStyle
+import com.example.data.PlannerTaskEntity
 import com.example.data.PreferenceStore
 import com.example.data.ReminderEntity
+import com.example.data.ResponseLengthPreference
 import com.example.data.SelectedFileInfo
+import com.example.data.SmartSearchResult
+import com.example.data.TaskRecurrence
+import com.example.data.WorkspaceSubTab
 import com.example.data.ZiaDatabase
 import com.example.data.ZiaRepository
 import com.example.data.ZiaSettingsState
@@ -32,12 +43,13 @@ import com.example.media.NotificationVault
 import com.example.security.DeviceHardwareAudit
 import com.example.security.PrivacyGuard
 import com.example.voice.AndroidSpeechManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -45,14 +57,14 @@ import kotlinx.coroutines.launch
 enum class ZiaDestination(val route: String, val label: String) {
     HOME("home", "Home"),
     CHAT("chat", "Chat"),
+    WORKSPACE("workspace", "Workspace"),
     ACTIONS("actions", "Controls"),
-    MEMORY("memory", "Memory"),
-    OFFLINE("offline", "Offline"),
-    SETTINGS("settings", "Settings")
+    SETTINGS("settings", "Privacy & Set")
 }
 
 data class ZiaTransientUiState(
     val currentDestination: ZiaDestination = ZiaDestination.HOME,
+    val activeWorkspaceTab: WorkspaceSubTab = WorkspaceSubTab.PLANNER,
     val isThinking: Boolean = false,
     val statusBannerHinglish: String? = null,
     val pendingConfirmationAction: PendingAction? = null,
@@ -60,8 +72,19 @@ data class ZiaTransientUiState(
     val volumeMap: Map<String, Int> = mapOf("MEDIA" to 60, "RING" to 60, "ALARM" to 80, "NOTIFICATION" to 60),
     val selectedSafFile: SelectedFileInfo? = null,
     val hardwareAudit: DeviceHardwareAudit? = null,
+    val performanceTelemetry: PerformanceTelemetry = PerformanceTelemetry(),
     val isNetworkOnline: Boolean = true,
-    val notificationPermissionGranted: Boolean = false
+    val notificationPermissionGranted: Boolean = false,
+    // Focus Timer State
+    val focusTimerSecondsRemaining: Int = 25 * 60,
+    val focusTimerRunning: Boolean = false,
+    val focusSessionLabel: String = "25m Pomodoro Study Session",
+    // Smart Search State
+    val smartSearchResult: SmartSearchResult? = null,
+    // Gaming Companion State
+    val selectedGameplayScreenshotUri: Uri? = null,
+    val screenshotAnalysisResult: String? = null,
+    val generatedGamingPackText: String? = null
 )
 
 class ZiaAssistantViewModel(application: Application) : AndroidViewModel(application) {
@@ -75,6 +98,7 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
     private val remoteAiProvider: RemoteAIProvider = GeminiRemoteAIProvider()
     val actionExecutor = ActionExecutor(appContext)
     private val speechManager = AndroidSpeechManager(appContext)
+    private var focusTimerJob: Job? = null
 
     val settingsState: StateFlow<ZiaSettingsState> = preferenceStore.settingsFlow.stateIn(
         scope = viewModelScope,
@@ -95,6 +119,24 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
     )
 
     val reminders: StateFlow<List<ReminderEntity>> = repository.reminders.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val plannerTasks: StateFlow<List<PlannerTaskEntity>> = repository.plannerTasks.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val knowledgeNotes: StateFlow<List<KnowledgeNoteEntity>> = repository.knowledgeNotes.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val gamingProfiles: StateFlow<List<GamingProfileEntity>> = repository.gamingProfiles.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -137,6 +179,18 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    private fun readAppRamTelemetry(latencyMs: Long, engineLabel: String): PerformanceTelemetry {
+        val rt = Runtime.getRuntime()
+        val usedMb = ((rt.totalMemory() - rt.freeMemory()) / (1024L * 1024L)).coerceAtLeast(12L)
+        val maxMb = (rt.maxMemory() / (1024L * 1024L)).coerceAtLeast(128L)
+        return PerformanceTelemetry(
+            appUsedRamMb = usedMb,
+            appMaxRamMb = maxMb,
+            lastResponseLatencyMs = latencyMs,
+            lastEngineUsed = engineLabel
+        )
+    }
+
     fun refreshSystemSnapshot() {
         viewModelScope.launch {
             val apps = actionExecutor.getLaunchableInstalledApps()
@@ -144,11 +198,17 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
             val audit = PrivacyGuard.inspectDeviceHardware(appContext)
             val online = remoteAiProvider.isNetworkOnline(appContext)
             val notifGranted = NotificationVault.isNotificationAccessGranted(appContext)
+            val currentPerf = _transientState.value.performanceTelemetry
+            val updatedPerf = readAppRamTelemetry(
+                latencyMs = currentPerf.lastResponseLatencyMs,
+                engineLabel = currentPerf.lastEngineUsed
+            )
             _transientState.update {
                 it.copy(
                     installedApps = apps,
                     volumeMap = volumes,
                     hardwareAudit = audit,
+                    performanceTelemetry = updatedPerf,
                     isNetworkOnline = online,
                     notificationPermissionGranted = notifGranted
                 )
@@ -161,6 +221,12 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
         refreshSystemSnapshot()
     }
 
+    fun selectWorkspaceTab(subTab: WorkspaceSubTab) {
+        _transientState.update {
+            it.copy(currentDestination = ZiaDestination.WORKSPACE, activeWorkspaceTab = subTab)
+        }
+    }
+
     fun dismissBanner() {
         _transientState.update { it.copy(statusBannerHinglish = null) }
     }
@@ -171,6 +237,10 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
 
     fun startVoicePushToTalk() {
         val currentSettings = settingsState.value
+        if (!currentSettings.voiceInputEnabled) {
+            showBanner("Voice Input abhi Privacy Center mein disabled hai. Enable karke Push-to-Talk use karein.")
+            return
+        }
         speechManager.startListening(
             language = currentSettings.language,
             onFinalResult = { recognizedText ->
@@ -208,10 +278,10 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
         if (cleaned.isEmpty()) return
 
         viewModelScope.launch {
+            val startTime = SystemClock.elapsedRealtime()
             val currentSettings = settingsState.value
             val currentMemories = memoryFacts.value
 
-            // Save user message to chat history
             repository.addChatMessage(
                 isUser = true,
                 text = cleaned,
@@ -221,7 +291,7 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
 
             _transientState.update { it.copy(isThinking = true, statusBannerHinglish = null) }
 
-            // Step 1: Try Deterministic Local Command Engine first (0ms offline phone controls)
+            // Step 1: Deterministic Local Command Engine (Offline Phone Controls)
             val commandMatch = localCommandEngine.evaluateCommand(cleaned, appContext)
             if (commandMatch.matched) {
                 commandMatch.reminderToSave?.let { (title, timeText) ->
@@ -235,8 +305,13 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
                         memoryEnabled = currentSettings.memorySavingEnabled
                     )
                     if (!memResult.isSafe && memResult.blockedReasonHinglish != null) {
+                        val elapsed = (SystemClock.elapsedRealtime() - startTime).coerceAtLeast(1L)
                         _transientState.update {
-                            it.copy(isThinking = false, statusBannerHinglish = memResult.blockedReasonHinglish)
+                            it.copy(
+                                isThinking = false,
+                                statusBannerHinglish = memResult.blockedReasonHinglish,
+                                performanceTelemetry = readAppRamTelemetry(elapsed, "PrivacyGuard Blocker")
+                            )
                         }
                         repository.addChatMessage(
                             isUser = false,
@@ -268,16 +343,28 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
                     engineSource = EngineSource.LOCAL_COMMAND
                 )
 
-                _transientState.update { it.copy(isThinking = false) }
+                val elapsed = (SystemClock.elapsedRealtime() - startTime).coerceAtLeast(1L)
+                _transientState.update {
+                    it.copy(
+                        isThinking = false,
+                        performanceTelemetry = readAppRamTelemetry(elapsed, "LocalCommandEngine")
+                    )
+                }
                 if (currentSettings.voiceOutputEnabled) {
                     speakMessageAloud(finalReply)
                 }
                 return@launch
             }
 
-            // Step 2: Check whether Remote Cloud AI is permitted & online
+            // Step 2: Check Remote Cloud AI availability & consent
             val online = remoteAiProvider.isNetworkOnline(appContext)
             _transientState.update { it.copy(isNetworkOnline = online) }
+
+            val memoriesForCloud = if (currentSettings.memorySavingEnabled && currentSettings.cloudPersonalContextConsent) {
+                currentMemories
+            } else {
+                emptyList()
+            }
 
             if (!currentSettings.forceOfflineMode && currentSettings.cloudAiConsentEnabled && online) {
                 when (
@@ -286,7 +373,8 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
                         userPrompt = cleaned,
                         language = currentSettings.language,
                         personality = currentSettings.personality,
-                        savedMemories = if (currentSettings.memorySavingEnabled) currentMemories else emptyList(),
+                        responseLength = currentSettings.responseLength,
+                        savedMemories = memoriesForCloud,
                         customApiKeyOverride = currentSettings.customGeminiApiKey
                     )
                 ) {
@@ -298,7 +386,13 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
                             engineSource = EngineSource.GEMINI_CLOUD,
                             codeSnippet = cloudResult.reply.codeSnippet
                         )
-                        _transientState.update { it.copy(isThinking = false) }
+                        val elapsed = (SystemClock.elapsedRealtime() - startTime).coerceAtLeast(1L)
+                        _transientState.update {
+                            it.copy(
+                                isThinking = false,
+                                performanceTelemetry = readAppRamTelemetry(elapsed, "Gemini Cloud AI")
+                            )
+                        }
                         if (currentSettings.voiceOutputEnabled) {
                             speakMessageAloud(cloudResult.reply.replyText)
                         }
@@ -310,7 +404,9 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
                             language = currentSettings.language,
                             personality = currentSettings.personality,
                             savedMemories = currentMemories,
-                            offlineReasonNote = cloudResult.reasonHinglish
+                            offlineReasonNote = cloudResult.reasonHinglish,
+                            responseLength = currentSettings.responseLength,
+                            customGreeting = currentSettings.customGreeting
                         )
                         repository.addChatMessage(
                             isUser = false,
@@ -319,7 +415,13 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
                             engineSource = EngineSource.LOCAL_ASSISTANT,
                             codeSnippet = localFallback.codeSnippet
                         )
-                        _transientState.update { it.copy(isThinking = false) }
+                        val elapsed = (SystemClock.elapsedRealtime() - startTime).coerceAtLeast(1L)
+                        _transientState.update {
+                            it.copy(
+                                isThinking = false,
+                                performanceTelemetry = readAppRamTelemetry(elapsed, "LocalAssistant Fallback")
+                            )
+                        }
                         if (currentSettings.voiceOutputEnabled) {
                             speakMessageAloud(localFallback.replyText)
                         }
@@ -327,7 +429,6 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
                     }
                 }
             } else {
-                // Step 3: Pure Offline / Opt-Out Mode -> Route to LocalAssistantEngine
                 val reason = when {
                     currentSettings.forceOfflineMode -> "Force Offline Mode active hai — 100% On-Device response."
                     !currentSettings.cloudAiConsentEnabled -> "Cloud AI Consent OFF hai — Privacy-First Local Engine active."
@@ -338,7 +439,9 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
                     language = currentSettings.language,
                     personality = currentSettings.personality,
                     savedMemories = currentMemories,
-                    offlineReasonNote = reason
+                    offlineReasonNote = reason,
+                    responseLength = currentSettings.responseLength,
+                    customGreeting = currentSettings.customGreeting
                 )
                 repository.addChatMessage(
                     isUser = false,
@@ -347,7 +450,13 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
                     engineSource = EngineSource.LOCAL_ASSISTANT,
                     codeSnippet = localReply.codeSnippet
                 )
-                _transientState.update { it.copy(isThinking = false) }
+                val elapsed = (SystemClock.elapsedRealtime() - startTime).coerceAtLeast(1L)
+                _transientState.update {
+                    it.copy(
+                        isThinking = false,
+                        performanceTelemetry = readAppRamTelemetry(elapsed, "LocalAssistant (Offline)")
+                    )
+                }
                 if (currentSettings.voiceOutputEnabled) {
                     speakMessageAloud(localReply.replyText)
                 }
@@ -355,7 +464,301 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    // Confirmation Gate Actions
+    // =========================================================================
+    // Daily Planner & Focus Timer Actions
+    // =========================================================================
+    fun addPlannerTask(
+        title: String,
+        subjectOrTag: String,
+        dayOffset: Int,
+        timeSlot: String,
+        recurrence: TaskRecurrence,
+        durationMinutes: Int
+    ) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            repository.addPlannerTask(title, subjectOrTag, dayOffset, timeSlot, recurrence, durationMinutes)
+            showBanner("Study task '${title.take(28)}' Planner mein add ho gaya!")
+        }
+    }
+
+    fun togglePlannerTask(id: Int, completed: Boolean) {
+        viewModelScope.launch { repository.togglePlannerTask(id, completed) }
+    }
+
+    fun deletePlannerTask(id: Int) {
+        viewModelScope.launch { repository.deletePlannerTask(id) }
+    }
+
+    fun startFocusTimer(minutes: Int, sessionLabel: String) {
+        focusTimerJob?.cancel()
+        val totalSec = (minutes.coerceIn(1, 180)) * 60
+        _transientState.update {
+            it.copy(
+                focusTimerSecondsRemaining = totalSec,
+                focusTimerRunning = true,
+                focusSessionLabel = sessionLabel
+            )
+        }
+        focusTimerJob = viewModelScope.launch {
+            while (_transientState.value.focusTimerSecondsRemaining > 0 && _transientState.value.focusTimerRunning) {
+                delay(1000L)
+                _transientState.update { state ->
+                    val next = (state.focusTimerSecondsRemaining - 1).coerceAtLeast(0)
+                    state.copy(focusTimerSecondsRemaining = next)
+                }
+            }
+            if (_transientState.value.focusTimerSecondsRemaining == 0) {
+                _transientState.update { it.copy(focusTimerRunning = false) }
+                val doneMsg = "Focus session '$sessionLabel' complete ho gaya! 5 minute ka break lein."
+                showBanner(doneMsg)
+                if (settingsState.value.voiceOutputEnabled) {
+                    speakMessageAloud(doneMsg)
+                }
+            }
+        }
+    }
+
+    fun pauseOrResumeFocusTimer() {
+        val current = _transientState.value
+        if (current.focusTimerRunning) {
+            focusTimerJob?.cancel()
+            _transientState.update { it.copy(focusTimerRunning = false) }
+        } else {
+            val remainingMin = (current.focusTimerSecondsRemaining / 60).coerceAtLeast(1)
+            startFocusTimer(remainingMin, current.focusSessionLabel)
+        }
+    }
+
+    fun resetFocusTimer(defaultMinutes: Int = 25) {
+        focusTimerJob?.cancel()
+        _transientState.update {
+            it.copy(
+                focusTimerSecondsRemaining = defaultMinutes * 60,
+                focusTimerRunning = false,
+                focusSessionLabel = "${defaultMinutes}m Focus Session"
+            )
+        }
+    }
+
+    // =========================================================================
+    // Coding Assistant & Local Code-Notes Library
+    // =========================================================================
+    fun generateAndSaveCodeSnippet(codingLanguage: String, promptOrError: String) {
+        viewModelScope.launch {
+            val reply = localAssistantEngine.generateCodeSnippetByLanguage(codingLanguage, promptOrError)
+            val snippet = reply.codeSnippet ?: reply.replyText
+            repository.saveKnowledgeNote(
+                title = "$codingLanguage: ${promptOrError.ifBlank { "Template Snippet" }.take(40)}",
+                content = snippet,
+                category = NoteCategory.CODE_SNIPPET,
+                languageOrTag = codingLanguage
+            )
+            showBanner("$codingLanguage snippet generate hokar Code-Notes Library mein save ho gaya!")
+        }
+    }
+
+    // =========================================================================
+    // Personal Knowledge Vault & Smart Search
+    // =========================================================================
+    fun saveNoteToKnowledgeVault(
+        title: String,
+        content: String,
+        category: NoteCategory,
+        languageOrTag: String
+    ) {
+        if (title.isBlank() || content.isBlank()) return
+        viewModelScope.launch {
+            val result = repository.saveKnowledgeNote(title, content, category, languageOrTag)
+            if (!result.isSafe) {
+                showBanner(result.blockedReasonHinglish ?: "Blocked by PrivacyGuard.")
+            } else {
+                showBanner("Saved to Knowledge Vault (${category.label})!")
+            }
+        }
+    }
+
+    fun deleteKnowledgeNote(id: Int) {
+        viewModelScope.launch {
+            repository.deleteKnowledgeNote(id)
+            showBanner("Vault item deleted.")
+        }
+    }
+
+    fun summarizeSafFileToVault(useCloudIfPermitted: Boolean) {
+        val safFile = _transientState.value.selectedSafFile
+        if (safFile == null) {
+            showBanner("Pehle 'Pick File / Document' se koi text ya code file select karein.")
+            return
+        }
+        viewModelScope.launch {
+            val currentSettings = settingsState.value
+            if (useCloudIfPermitted && (!currentSettings.cloudAiConsentEnabled || !currentSettings.cloudDocumentUploadConsent)) {
+                showBanner("Document cloud upload ke liye Privacy Center mein 'Cloud Document Upload Consent' enable karein. Offline summary generate ki gayi hai.")
+            }
+
+            val summaryText = if (useCloudIfPermitted &&
+                currentSettings.cloudAiConsentEnabled &&
+                currentSettings.cloudDocumentUploadConsent &&
+                !currentSettings.forceOfflineMode &&
+                remoteAiProvider.isNetworkOnline(appContext)
+            ) {
+                val res = remoteAiProvider.generateCloudResponse(
+                    context = appContext,
+                    userPrompt = "Summarize this user-selected file (${safFile.displayName}) in concise bullet points:\n\n${safFile.previewContent.take(1200)}",
+                    language = currentSettings.language,
+                    personality = currentSettings.personality,
+                    responseLength = ResponseLengthPreference.SHORT,
+                    savedMemories = emptyList(),
+                    customApiKeyOverride = currentSettings.customGeminiApiKey
+                )
+                when (res) {
+                    is RemoteAiResult.Success -> res.reply.replyText
+                    is RemoteAiResult.Unavailable -> localAssistantEngine.summarizeTextLocally(
+                        safFile.displayName,
+                        safFile.previewContent
+                    )
+                }
+            } else {
+                localAssistantEngine.summarizeTextLocally(safFile.displayName, safFile.previewContent)
+            }
+
+            repository.saveKnowledgeNote(
+                title = "Summary: ${safFile.displayName}",
+                content = summaryText,
+                category = NoteCategory.DOC_SUMMARY,
+                languageOrTag = safFile.mimeType
+            )
+            showBanner("'${safFile.displayName}' ka summary Knowledge Vault mein save ho gaya!")
+        }
+    }
+
+    fun runSmartSearch(query: String, includeOnlineWebSearch: Boolean) {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        viewModelScope.launch {
+            val qLower = q.lowercase()
+            val localHits = mutableListOf<String>()
+
+            knowledgeNotes.value.forEach { note ->
+                if (note.title.lowercase().contains(qLower) || note.content.lowercase().contains(qLower)) {
+                    localHits.add("[Vault · ${note.category}] ${note.title}: ${note.content.take(100)}")
+                }
+            }
+            memoryFacts.value.forEach { mem ->
+                if (mem.key.lowercase().contains(qLower) || mem.value.lowercase().contains(qLower)) {
+                    localHits.add("[Memory · ${mem.category}] ${mem.key}: ${mem.value}")
+                }
+            }
+            plannerTasks.value.forEach { task ->
+                if (task.title.lowercase().contains(qLower) || task.subjectOrTag.lowercase().contains(qLower)) {
+                    localHits.add("[Planner] ${task.title} (${task.timeSlot})")
+                }
+            }
+
+            val currentSettings = settingsState.value
+            if (!includeOnlineWebSearch || currentSettings.forceOfflineMode || !currentSettings.cloudAiConsentEnabled) {
+                _transientState.update {
+                    it.copy(
+                        smartSearchResult = SmartSearchResult(
+                            query = q,
+                            localMatches = localHits,
+                            retrievedWebFacts = emptyList(),
+                            citedSources = listOf("On-Device SQLite Knowledge Vault"),
+                            aiSynthesis = "100% Offline Search complete: Found ${localHits.size} local matches across your Vault, Memory, and Planner.",
+                            isOnlineResult = false
+                        )
+                    )
+                }
+            } else {
+                _transientState.update { it.copy(isThinking = true) }
+                val onlineRes = remoteAiProvider.performSmartWebSearch(
+                    context = appContext,
+                    query = q,
+                    localMatches = localHits,
+                    customApiKeyOverride = currentSettings.customGeminiApiKey
+                )
+                _transientState.update {
+                    it.copy(isThinking = false, smartSearchResult = onlineRes)
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // Gaming Companion Actions
+    // =========================================================================
+    fun saveGamingProfile(
+        gameTitle: String,
+        sensitivityNotes: String,
+        matchChecklist: String,
+        ytIdeaNotes: String
+    ) {
+        if (gameTitle.isBlank()) return
+        viewModelScope.launch {
+            repository.saveGamingProfile(
+                gameTitle = gameTitle,
+                sensitivityNotes = sensitivityNotes,
+                matchChecklist = matchChecklist,
+                ytIdeaNotes = ytIdeaNotes
+            )
+            showBanner("Gaming profile '$gameTitle' saved locally!")
+        }
+    }
+
+    fun deleteGamingProfile(id: Int) {
+        viewModelScope.launch { repository.deleteGamingProfile(id) }
+    }
+
+    fun generateYouTubeGamingPack(gameName: String, focusTopic: String) {
+        val pack = localAssistantEngine.generateGamingCreatorPack(gameName, focusTopic)
+        _transientState.update { it.copy(generatedGamingPackText = pack) }
+    }
+
+    fun onGameplayScreenshotSelected(uri: Uri?) {
+        _transientState.update {
+            it.copy(
+                selectedGameplayScreenshotUri = uri,
+                screenshotAnalysisResult = if (uri != null) {
+                    "Screenshot selected locally. Tap 'Confirm Cloud Vision Analysis' to analyze HUD/stats via Gemini, or inspect locally."
+                } else null
+            )
+        }
+    }
+
+    fun analyzeSelectedScreenshotWithCloudConsent(question: String) {
+        val uri = _transientState.value.selectedGameplayScreenshotUri
+        if (uri == null) {
+            showBanner("Pehle Photo Picker se koi gameplay screenshot select karein.")
+            return
+        }
+        val currentSettings = settingsState.value
+        if (!currentSettings.cloudAiConsentEnabled || !currentSettings.cloudDocumentUploadConsent) {
+            showBanner("Screenshot cloud par bhejne ke liye Privacy Center mein 'Cloud AI' aur 'Document/Image Upload Consent' ON hona zaroori hai.")
+            return
+        }
+
+        viewModelScope.launch {
+            _transientState.update { it.copy(isThinking = true) }
+            val result = remoteAiProvider.analyzeGameplayScreenshot(
+                context = appContext,
+                imageUri = uri,
+                userQuestion = question,
+                customApiKeyOverride = currentSettings.customGeminiApiKey
+            )
+            val outputText = when (result) {
+                is RemoteAiResult.Success -> result.reply.replyText
+                is RemoteAiResult.Unavailable -> result.reasonHinglish
+            }
+            _transientState.update {
+                it.copy(isThinking = false, screenshotAnalysisResult = outputText)
+            }
+        }
+    }
+
+    // =========================================================================
+    // Confirmation Gate & Device Actions
+    // =========================================================================
     fun requestActionWithConfirmationGate(action: PendingAction) {
         if (action.requiresConfirmation) {
             _transientState.update { it.copy(pendingConfirmationAction = action) }
@@ -373,7 +776,7 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
             if (action is PendingAction.ClearAllMemory) {
                 repository.wipeAllLocalData()
                 repository.ensureStarterDataSeeded()
-                showBanner("Saari local memory, reminders aur chat history safely wipe ho gayi.")
+                showBanner("Saari local memory, vault notes, planner tasks aur chat history safely wipe ho gayi.")
             } else {
                 val outcome = actionExecutor.execute(action)
                 showBanner(outcome.messageHinglish)
@@ -397,7 +800,6 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    // Quick Controls & SAF File Picker
     fun updateStreamVolume(streamType: String, percent: Int) {
         val outcome = actionExecutor.execute(
             PendingAction.AdjustVolume(streamType = streamType, targetPercent = percent)
@@ -427,7 +829,7 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
         _transientState.update { it.copy(selectedSafFile = null) }
     }
 
-    // Memory & Reminders CRUD
+    // Memory & Export
     fun addOrUpdateMemoryFact(key: String, value: String, category: String) {
         viewModelScope.launch {
             val check = repository.saveMemoryFactSafely(
@@ -462,6 +864,20 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    fun exportMemoryAndVaultAsText(): String {
+        val sb = StringBuilder()
+        sb.appendLine("=== ZIA AI LOCAL MEMORY & VAULT EXPORT ===")
+        sb.appendLine("Preferences (${memoryFacts.value.size}):")
+        memoryFacts.value.forEach {
+            sb.appendLine("- [${it.category}] ${it.key}: ${it.value}")
+        }
+        sb.appendLine("\nKnowledge Vault (${knowledgeNotes.value.size}):")
+        knowledgeNotes.value.forEach {
+            sb.appendLine("- [${it.category} / ${it.languageOrTag}] ${it.title}: ${it.content}")
+        }
+        return sb.toString()
+    }
+
     fun addReminder(title: String, timeText: String) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -471,15 +887,11 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun toggleReminder(id: Int, completed: Boolean) {
-        viewModelScope.launch {
-            repository.toggleReminder(id, completed)
-        }
+        viewModelScope.launch { repository.toggleReminder(id, completed) }
     }
 
     fun deleteReminder(id: Int) {
-        viewModelScope.launch {
-            repository.deleteReminder(id)
-        }
+        viewModelScope.launch { repository.deleteReminder(id) }
     }
 
     fun clearChatHistoryOnly() {
@@ -490,11 +902,10 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    // Notification Reader Actions
     fun readLatestNotificationAloud() {
         val currentSettings = settingsState.value
         if (!currentSettings.notificationReaderEnabled) {
-            showBanner("Notification Reader abhi OFF hai. Settings mein jaakar enable karein.")
+            showBanner("Notification Reader abhi OFF hai. Privacy & Settings mein jaakar enable karein.")
             return
         }
         val latest = recentNotifications.value.firstOrNull()
@@ -507,13 +918,35 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
         showBanner("Reading aloud: ${latest.appTitle}")
     }
 
-    // Settings Mutations
+    // Settings & Privacy Mutations
     fun setLanguage(language: AssistantLanguage) {
         viewModelScope.launch { preferenceStore.setLanguage(language) }
     }
 
     fun setPersonality(personality: PersonalityStyle) {
         viewModelScope.launch { preferenceStore.setPersonality(personality) }
+    }
+
+    fun setAvatarTheme(theme: AvatarThemePreset) {
+        viewModelScope.launch { preferenceStore.setAvatarTheme(theme) }
+    }
+
+    fun setResponseLength(length: ResponseLengthPreference) {
+        viewModelScope.launch { preferenceStore.setResponseLength(length) }
+    }
+
+    fun setCustomGreeting(greeting: String) {
+        viewModelScope.launch {
+            preferenceStore.setCustomGreeting(greeting)
+            showBanner("Custom greeting updated!")
+        }
+    }
+
+    fun setVoiceInputEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            if (!enabled) speechManager.stopListening()
+            preferenceStore.setVoiceInputEnabled(enabled)
+        }
     }
 
     fun setVoiceOutputEnabled(enabled: Boolean) {
@@ -537,6 +970,14 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
 
     fun setCloudAiConsentEnabled(enabled: Boolean) {
         viewModelScope.launch { preferenceStore.setCloudAiConsentEnabled(enabled) }
+    }
+
+    fun setCloudPersonalContextConsent(enabled: Boolean) {
+        viewModelScope.launch { preferenceStore.setCloudPersonalContextConsent(enabled) }
+    }
+
+    fun setCloudDocumentUploadConsent(enabled: Boolean) {
+        viewModelScope.launch { preferenceStore.setCloudDocumentUploadConsent(enabled) }
     }
 
     fun setForceOfflineMode(forced: Boolean) {
@@ -566,6 +1007,7 @@ class ZiaAssistantViewModel(application: Application) : AndroidViewModel(applica
 
     override fun onCleared() {
         super.onCleared()
+        focusTimerJob?.cancel()
         speechManager.release()
     }
 }

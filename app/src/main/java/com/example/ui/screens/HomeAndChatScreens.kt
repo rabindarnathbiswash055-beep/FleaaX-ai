@@ -13,7 +13,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,13 +28,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Code
@@ -44,16 +44,15 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -74,7 +73,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -89,7 +87,10 @@ import com.example.data.AssistantLanguage
 import com.example.data.AvatarState
 import com.example.data.ChatMessageEntity
 import com.example.data.EngineSource
+import com.example.data.NoteCategory
 import com.example.data.PendingAction
+import com.example.data.PerformanceTelemetry
+import com.example.data.WorkspaceSubTab
 import com.example.data.ZiaSettingsState
 import com.example.ui.ZiaDestination
 import com.example.ui.components.ActionConfirmationModalCard
@@ -118,6 +119,7 @@ fun HomeScreen(
     partialTranscript: String,
     audioLevelRms: Float,
     isNetworkOnline: Boolean,
+    performanceTelemetry: PerformanceTelemetry,
     latestMessages: List<ChatMessageEntity>,
     pendingAction: PendingAction?,
     onSelectLanguage: (AssistantLanguage) -> Unit,
@@ -128,6 +130,7 @@ fun HomeScreen(
     onConfirmAction: () -> Unit,
     onCancelAction: () -> Unit,
     onNavigate: (ZiaDestination) -> Unit,
+    onOpenWorkspaceSubTab: (WorkspaceSubTab) -> Unit,
     onShowBanner: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -193,7 +196,7 @@ fun HomeScreen(
         "Open YouTube",
         "Kemon acho ZIA?",
         "Kotlin coroutine code dikhao",
-        "Device RAM status check"
+        "Gaming YouTube ideas"
     )
 
     Column(
@@ -208,15 +211,16 @@ fun HomeScreen(
                 .widthIn(max = 600.dp)
                 .fillMaxWidth(),
             contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Top Connectivity & Mode Telemetry Row
+            // 1. Top Connectivity, Latency & Memory Telemetry Row
             item {
                 TopTelemetryHeader(
                     settings = settings,
                     isNetworkOnline = isNetworkOnline,
-                    onOfflineBadgeClick = { onNavigate(ZiaDestination.OFFLINE) }
+                    performanceTelemetry = performanceTelemetry,
+                    onHeaderClick = { onNavigate(ZiaDestination.SETTINGS) }
                 )
             }
 
@@ -255,12 +259,13 @@ fun HomeScreen(
                 }
             }
 
-            // 3. Centerpiece Anime Character Avatar Stage
+            // 3. Centerpiece Anime Character Avatar Stage (Customizable Theme)
             item {
                 AnimeAvatarStage(
                     avatarState = avatarState,
                     audioLevelRms = audioLevelRms,
-                    avatarSize = 212.dp
+                    avatarTheme = settings.avatarTheme,
+                    avatarSize = 204.dp
                 )
             }
 
@@ -307,7 +312,7 @@ fun HomeScreen(
                                     onClick = onStopSpeaking,
                                     modifier = Modifier.testTag("stop_speaking_button")
                                 ) {
-                                    Icon(Icons.Default.VolumeOff, contentDescription = "Mute speech")
+                                    Icon(Icons.AutoMirrored.Filled.VolumeOff, contentDescription = "Mute speech")
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Mute")
                                 }
@@ -317,7 +322,7 @@ fun HomeScreen(
                 }
             }
 
-            // 5. Confirmation Preview Gate (if any sensitive phone action is waiting)
+            // 5. Confirmation Preview Gate
             if (pendingAction != null) {
                 item {
                     ActionConfirmationModalCard(
@@ -329,7 +334,37 @@ fun HomeScreen(
                 }
             }
 
-            // 6. Quick Multilingual Voice/Text Sample Chips
+            // 6. Workspace Hub Quick Launchers
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "WORKSPACE MODULES (OFFLINE + HYBRID)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ZiaTextMuted
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        WorkspaceSubTab.entries.forEach { subTab ->
+                            AssistChip(
+                                onClick = { onOpenWorkspaceSubTab(subTab) },
+                                label = { Text(subTab.title) },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = ZiaCardSurface,
+                                    labelColor = ZiaAcousticCyan
+                                ),
+                                modifier = Modifier.testTag("home_workspace_chip_${subTab.name.lowercase()}")
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 7. Quick Multilingual Voice/Text Sample Chips
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
@@ -359,7 +394,7 @@ fun HomeScreen(
                 }
             }
 
-            // 7. Recent Conversation Preview Card
+            // 8. Recent Conversation Preview Card
             item {
                 val recentTwo = latestMessages.takeLast(2)
                 Card(
@@ -420,7 +455,6 @@ fun HomeScreen(
             }
         }
 
-        // Bottom Push-to-Talk & Permanent Text Input Dock
         VoiceAndTextInputDock(
             textInput = textInput,
             onTextChange = { textInput = it },
@@ -441,7 +475,8 @@ fun HomeScreen(
 private fun TopTelemetryHeader(
     settings: ZiaSettingsState,
     isNetworkOnline: Boolean,
-    onOfflineBadgeClick: () -> Unit
+    performanceTelemetry: PerformanceTelemetry,
+    onHeaderClick: () -> Unit
 ) {
     val effectiveOnline = isNetworkOnline && !settings.forceOfflineMode && settings.cloudAiConsentEnabled
     val statusColor = when {
@@ -462,7 +497,7 @@ private fun TopTelemetryHeader(
             .clip(RoundedCornerShape(16.dp))
             .background(ZiaMidnightSurface)
             .border(1.dp, ZiaElevatedBorder, RoundedCornerShape(16.dp))
-            .clickable { onOfflineBadgeClick() }
+            .clickable { onHeaderClick() }
             .padding(horizontal = 14.dp, vertical = 10.dp)
             .testTag("top_telemetry_header"),
         verticalAlignment = Alignment.CenterVertically,
@@ -478,7 +513,7 @@ private fun TopTelemetryHeader(
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text = "ZIA AI · ${settings.personality.title.uppercase()}",
+                    text = "ZIA AI · ${settings.personality.title.uppercase()} · ${performanceTelemetry.appUsedRamMb}MB RAM",
                     style = MaterialTheme.typography.labelSmall,
                     color = ZiaTextSecondary
                 )
@@ -495,7 +530,7 @@ private fun TopTelemetryHeader(
             shape = RoundedCornerShape(10.dp)
         ) {
             Text(
-                text = if (settings.wakeWordSessionEnabled) "Hey ZIA: ON" else "Push-to-Talk",
+                text = "${performanceTelemetry.lastResponseLatencyMs}ms",
                 style = MaterialTheme.typography.labelSmall,
                 color = ZiaAcousticCyan,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -528,7 +563,6 @@ fun VoiceAndTextInputDock(
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Push-to-Talk Microphone Button (48dp minimum touch target)
             FilledIconButton(
                 onClick = onMicClick,
                 modifier = Modifier
@@ -600,6 +634,7 @@ fun ChatScreen(
     onStopVoice: () -> Unit,
     onSubmitText: (String) -> Unit,
     onSpeakMessage: (String) -> Unit,
+    onSaveMessageToVault: (String, String, NoteCategory, String) -> Unit,
     onConfirmAction: () -> Unit,
     onCancelAction: () -> Unit,
     onClearChat: () -> Unit,
@@ -628,7 +663,6 @@ fun ChatScreen(
             .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Chat Header Bar
         Row(
             modifier = Modifier
                 .widthIn(max = 600.dp)
@@ -687,10 +721,26 @@ fun ChatScreen(
                 ChatMessageBubble(
                     message = msg,
                     onSpeakClick = { onSpeakMessage(msg.text) },
+                    onSaveAnswerToVault = {
+                        onSaveMessageToVault(
+                            "ZIA Answer (${msg.languageCode})",
+                            msg.text,
+                            NoteCategory.AI_ANSWER,
+                            msg.languageCode
+                        )
+                    },
                     onCopyCode = { snippet ->
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                         clipboard?.setPrimaryClip(ClipData.newPlainText("ZIA Code Snippet", snippet))
                         onShowBanner("Code snippet clipboard mein copy ho gaya!")
+                    },
+                    onSaveCodeToLibrary = { snippet ->
+                        onSaveMessageToVault(
+                            "Chat Code Snippet",
+                            snippet,
+                            NoteCategory.CODE_SNIPPET,
+                            "Code"
+                        )
                     }
                 )
             }
@@ -739,7 +789,7 @@ fun ChatScreen(
                     textInput = ""
                 }
             },
-            placeholder = "Ask ZIA anything or request Kotlin/Python code..."
+            placeholder = "Ask ZIA anything or request Kotlin/JS/HTML/CSS/Python code..."
         )
     }
 }
@@ -748,7 +798,9 @@ fun ChatScreen(
 private fun ChatMessageBubble(
     message: ChatMessageEntity,
     onSpeakClick: () -> Unit,
-    onCopyCode: (String) -> Unit
+    onSaveAnswerToVault: () -> Unit,
+    onCopyCode: (String) -> Unit,
+    onSaveCodeToLibrary: (String) -> Unit
 ) {
     val isUser = message.isUser
     val sourceLabel = remember(message.engineSource) {
@@ -788,7 +840,7 @@ private fun ChatMessageBubble(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                             Icon(
                                 imageVector = if (message.engineSource == EngineSource.SYSTEM_SECURITY.name) {
                                     Icons.Default.Security
@@ -806,16 +858,29 @@ private fun ChatMessageBubble(
                                 color = ZiaAcousticCyan
                             )
                         }
-                        IconButton(
-                            onClick = onSpeakClick,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = "Speak reply aloud",
-                                tint = ZiaTextSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
+                        Row {
+                            IconButton(
+                                onClick = onSaveAnswerToVault,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BookmarkAdd,
+                                    contentDescription = "Save answer to Knowledge Vault",
+                                    tint = ZiaSapphireBlue,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = onSpeakClick,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Speak reply aloud",
+                                    tint = ZiaTextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(6.dp))
@@ -827,7 +892,6 @@ private fun ChatMessageBubble(
                     color = ZiaTextPrimary
                 )
 
-                // Render safe copyable Code Snippet Card if present
                 AnimatedVisibility(visible = !message.codeSnippet.isNullOrBlank()) {
                     val code = message.codeSnippet.orEmpty()
                     Column(
@@ -845,18 +909,23 @@ private fun ChatMessageBubble(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "SAFE CODE SNIPPET (READ/EDIT ONLY)",
+                                text = "SAFE CODE SNIPPET",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ZiaNeuralViolet
                             )
-                            TextButton(onClick = { onCopyCode(code) }) {
-                                Icon(
-                                    imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = "Copy code",
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Copy")
+                            Row {
+                                TextButton(onClick = { onSaveCodeToLibrary(code) }) {
+                                    Text("Save to Library")
+                                }
+                                TextButton(onClick = { onCopyCode(code) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = "Copy code",
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Copy")
+                                }
                             }
                         }
                         Text(

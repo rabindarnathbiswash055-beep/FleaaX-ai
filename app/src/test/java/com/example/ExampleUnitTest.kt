@@ -3,6 +3,7 @@ package com.example
 import com.example.ai.DeterministicLocalAssistantEngine
 import com.example.data.AssistantLanguage
 import com.example.data.PersonalityStyle
+import com.example.data.ResponseLengthPreference
 import com.example.security.PrivacyGuard
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -24,22 +25,29 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun localAssistantEngine_calculatesMathAndGeneratesCodeOffline() {
+    fun localAssistantEngine_supportsMultiLanguageCodeGamingAndDocumentSummary() {
         val engine = DeterministicLocalAssistantEngine()
         val mathReply = engine.generateLocalReply(
             input = "What is 25 * 4?",
             language = AssistantLanguage.HINGLISH,
-            personality = PersonalityStyle.FRIENDLY,
-            savedMemories = emptyList()
+            personality = PersonalityStyle.STUDY_BUDDY,
+            savedMemories = emptyList(),
+            responseLength = ResponseLengthPreference.BALANCED
         )
         assertTrue(mathReply.replyText.contains("100"))
 
-        val codeReply = engine.generateLocalReply(
-            input = "Show Kotlin coroutine viewmodel code",
-            language = AssistantLanguage.HINGLISH,
-            personality = PersonalityStyle.PROFESSIONAL,
-            savedMemories = emptyList()
-        )
-        assertNotNull(codeReply.codeSnippet)
+        val jsReply = engine.generateCodeSnippetByLanguage("JavaScript", "fetch timeout")
+        assertNotNull(jsReply.codeSnippet)
+        assertTrue(jsReply.codeSnippet!!.contains("AbortController"))
+
+        val htmlReply = engine.generateCodeSnippetByLanguage("HTML/CSS", "card")
+        assertNotNull(htmlReply.codeSnippet)
+        assertTrue(htmlReply.codeSnippet!!.contains("zia-card"))
+
+        val gamingPack = engine.generateGamingCreatorPack("BGMI", "60 FPS Smooth")
+        assertTrue(gamingPack.contains("Thumbnail Concept"))
+
+        val summary = engine.summarizeTextLocally("Study.md", "Line 1 Kotlin\nLine 2 Compose\nLine 3 Room")
+        assertTrue(summary.contains("Offline Local Summary"))
     }
 }
