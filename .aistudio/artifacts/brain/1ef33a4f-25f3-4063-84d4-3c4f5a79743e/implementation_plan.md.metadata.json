@@ -1,0 +1,6 @@
+{
+  "summary": "Comprehensive implementation plan for ZIA AI, a Native Android Multilingual Hybrid Voice Assistant featuring an anime-style AI character avatar, offline-first deterministic command engine, Gemini 3.5 Flash cloud reasoning with custom API key fallback, multilingual SpeechRecognizer/TextToSpeech (English, Hinglish, Banglish, Bengali), confirmation-gated phone controls, local privacy-first Room + DataStore memory, media controls, and optional notification reader.",
+  "updatedAt": "2026-10-17T19:19:08.786428055Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

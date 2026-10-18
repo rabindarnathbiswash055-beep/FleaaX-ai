@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">ZIA AI</string>
+    <string name="app_tagline">Your Voice. Your World. Your ZIA.</string>
+    <string name="notification_service_label">ZIA AI Notification Reader (Local Only)</string>
+    <string name="avatar_disclaimer">AI Assistant Graphic · Push-to-Talk Only</string>
+    <string name="mic_permission_rationale">ZIA AI uses the microphone only when you press Push-to-Talk to convert your speech into text commands. Nothing is recorded in the background.</string>
+    <string name="privacy_notice_summary">All assistant memory, reminders, and chat history stay locally on your phone by default. Passwords, OTPs, and sensitive tokens are automatically blocked from memory. Cloud AI requests are sent only when online and when Cloud AI Consent is enabled.</string>
+</resources>

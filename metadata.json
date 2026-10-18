@@ -1,0 +1,6 @@
+{
+  "name": "ZIA AI",
+  "description": "Native Android Multilingual Hybrid Voice Assistant with anime avatar, offline phone commands, and Gemini cloud reasoning.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

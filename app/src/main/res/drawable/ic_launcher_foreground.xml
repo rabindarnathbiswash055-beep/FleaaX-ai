@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer cyber headset arc inside the 66dp safe zone (21..87) -->
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M54,24 C36.3,24 22,38.3 22,56 L22,64 C22,67.3 24.7,70 28,70 L32,70 L32,52 L27.3,52 C29.2,39.1 40.4,29 54,29 C67.6,29 78.8,39.1 80.7,52 L76,52 L76,70 L80,70 C83.3,70 86,67.3 86,64 L86,56 C86,38.3 71.7,24 54,24 Z" />
+    <!-- Central glowing neural orb -->
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M54,57m-21,0a21,21 0,1 1,42 0a21,21 0,1 1,-42 0" />
+    <!-- Bold stylized 'Z' + Voice Waveform silhouette -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,45 L65,45 L65,50 L50.5,64 L65,64 L65,69 L43,69 L43,64 L57.5,50 L43,50 Z" />
+    <!-- Acoustic side pulse bars -->
+    <path
+        android:fillColor="#4F8CFF"
+        android:pathData="M35,51h3v12h-3zM70,51h3v12h-3z" />
+</vector>
